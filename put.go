@@ -138,9 +138,18 @@ func (c *Client) putMulti(ctx context.Context,
 				lockCacheKeys); err != nil {
 				c.onError(ctx, errors.Wrap(err, "putMulti cache.DeleteMulti"))
 			}
+			if err := c.cacher2.DeleteMulti(ctx,
+				lockCacheKeys); err != nil {
+				c.onError(ctx, errors.Wrap(err, "putMulti:cacher2 cache.DeleteMulti"))
+			}
 		}()
 
 		if err := c.cacher.SetMulti(ctx,
+			lockCacheItems); err != nil {
+			return nil, err
+		}
+
+		if err := c.cacher2.SetMulti(ctx,
 			lockCacheItems); err != nil {
 			return nil, err
 		}

@@ -71,6 +71,10 @@ func (c *Client) deleteMulti(ctx context.Context, keys []*datastore.Key) error {
 			lockCacheItems); err != nil {
 			return err
 		}
+		if err := c.cacher2.SetMulti(ctx,
+			lockCacheItems); err != nil {
+			return err
+		}
 	}
 
 	return c.Client.DeleteMulti(ctx, keys)

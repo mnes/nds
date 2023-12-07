@@ -11,6 +11,7 @@ type OnErrorFunc func(ctx context.Context, err error)
 
 type Client struct {
 	cacher    Cacher
+	cacher2   Cacher
 	onErrorFn OnErrorFunc
 
 	// TODO: Client is exported since we embedded datastore.Client - fix this
@@ -41,9 +42,10 @@ func WithOnErrorFunc(f OnErrorFunc) ClientOption {
 
 // NewClient will return an nds.Client that can be used exactly like a datastore.Client but will
 // transparently use the cache configuration provided to cache requests when it can.
-func NewClient(ctx context.Context, cacher Cacher, opts ...ClientOption) (*Client, error) {
+func NewClient(ctx context.Context, cacher Cacher, cacher2 Cacher, opts ...ClientOption) (*Client, error) {
 	client := &Client{
-		cacher: cacher,
+		cacher:  cacher,
+		cacher2: cacher2,
 	}
 
 	for _, opt := range opts {
