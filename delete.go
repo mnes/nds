@@ -71,8 +71,14 @@ func (c *Client) deleteMulti(ctx context.Context, keys []*datastore.Key) error {
 			lockCacheItems); err != nil {
 			return err
 		}
+	}
+
+	if c.cacher2 != nil {
+		_, lockCacheItems2 := getCacheLocks2(ctx, keys)
+
+		// Make sure we can lock the cache with no errors before deleting.
 		if err := c.cacher2.SetMulti(ctx,
-			lockCacheItems); err != nil {
+			lockCacheItems2); err != nil {
 			return err
 		}
 	}
