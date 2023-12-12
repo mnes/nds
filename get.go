@@ -431,8 +431,9 @@ func (c *Client) saveCache(ctx context.Context, cacheItems []cacheItem) {
 	if err := c.cacher.CompareAndSwapMulti(ctx, saveItems); err != nil {
 		c.onError(ctx, errors.Wrap(err, "nds:saveCache CompareAndSwapMulti"))
 	}
-
-	if err := c.cacher2.CompareAndSwapMulti(ctx, saveItems2); err != nil {
-		c.onError(ctx, errors.Wrap(err, "nds:saveCache:cacher2 CompareAndSwapMulti"))
+	if c.cacher2 != nil {
+		if err := c.cacher2.CompareAndSwapMulti(ctx, saveItems2); err != nil {
+			c.onError(ctx, errors.Wrap(err, "nds:saveCache:cacher2 CompareAndSwapMulti"))
+		}
 	}
 }
