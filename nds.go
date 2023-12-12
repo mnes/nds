@@ -2,6 +2,7 @@ package nds
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"encoding/gob"
 	"encoding/hex"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/datastore"
+	datastore2 "google.golang.org/appengine/v2/datastore"
 )
 
 const (
@@ -122,7 +124,8 @@ func checkKeysValues(keys []*datastore.Key, values reflect.Value) error {
 	return nil
 }
 
-func createCacheKey(key *datastore.Key) string {
+func createCacheKey(c context.Context, k *datastore.Key) string {
+	key := datastore2.NewKey(c, k.Kind, k.Name, 0, nil)
 	cacheKey := cachePrefix + key.Encode()
 	if len(cacheKey) > cacheMaxKeySize {
 		hash := sha1.Sum([]byte(cacheKey))
@@ -199,7 +202,7 @@ func groupErrors(errs []error, total, limit int) error {
 
 // getCacheLocks will create cache Items locks for the given datastore keys.
 // It also removes duplicate entries.
-func getCacheLocks(keys []*datastore.Key) ([]string, []*Item) {
+func getCacheLocks(ctx context.Context, keys []*datastore.Key) ([]string, []*Item) {
 	lockCacheKeys := make([]string, 0, len(keys))
 	lockCacheItems := make([]*Item, 0, len(keys))
 	set := make(map[string]interface{})
@@ -207,7 +210,7 @@ func getCacheLocks(keys []*datastore.Key) ([]string, []*Item) {
 		// Worst case scenario is that we lock the entity for cacheLockTime.
 		// datastore.Delete will raise the appropriate error.
 		if key != nil && !key.Incomplete() {
-			cacheKey := createCacheKey(key)
+			cacheKey := createCacheKey(ctx, key)
 			if _, found := set[cacheKey]; !found {
 				item := &Item{
 					Key:        cacheKey,

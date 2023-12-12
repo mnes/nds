@@ -165,7 +165,7 @@ func (c *Client) getMulti(ctx context.Context,
 		cacheItems := make([]cacheItem, num)
 		for i, key := range keys {
 			cacheItems[i].key = key
-			cacheItems[i].cacheKey = createCacheKey(key)
+			cacheItems[i].cacheKey = createCacheKey(ctx, key)
 			cacheItems[i].val = vals.Index(i)
 			cacheItems[i].state = miss
 		}

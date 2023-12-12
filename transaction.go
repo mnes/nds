@@ -22,7 +22,7 @@ func (t *Transaction) lockKey(key *datastore.Key) {
 
 func (t *Transaction) lockKeys(keys []*datastore.Key) {
 	if t.c.cacher != nil {
-		_, lockCacheItems := getCacheLocks(keys)
+		_, lockCacheItems := getCacheLocks(t.ctx, keys)
 		t.Lock()
 		t.lockCacheItems = append(t.lockCacheItems,
 			lockCacheItems...)

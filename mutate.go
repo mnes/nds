@@ -85,8 +85,8 @@ func (c *Client) Mutate(ctx context.Context, muts ...*Mutation) ([]*datastore.Ke
 	}
 
 	if c.cacher != nil {
-		releaseCacheKeys, lockCacheItems := getCacheLocks(toLockRelease)
-		_, moreLockCacheItems := getCacheLocks(toLock)
+		releaseCacheKeys, lockCacheItems := getCacheLocks(ctx, toLockRelease)
+		_, moreLockCacheItems := getCacheLocks(ctx, toLock)
 		lockCacheItems = append(lockCacheItems, moreLockCacheItems...)
 
 		defer func() {

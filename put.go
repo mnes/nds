@@ -130,7 +130,7 @@ func (c *Client) Put(ctx context.Context,
 func (c *Client) putMulti(ctx context.Context,
 	keys []*datastore.Key, vals interface{}) ([]*datastore.Key, error) {
 	if c.cacher != nil {
-		lockCacheKeys, lockCacheItems := getCacheLocks(keys)
+		lockCacheKeys, lockCacheItems := getCacheLocks(ctx, keys)
 
 		defer func() {
 			// Remove the locks.
