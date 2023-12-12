@@ -138,10 +138,6 @@ func (c *Client) putMulti(ctx context.Context,
 				lockCacheKeys); err != nil {
 				c.onError(ctx, errors.Wrap(err, "putMulti cache.DeleteMulti"))
 			}
-			if err := c.cacher2.DeleteMulti(ctx,
-				lockCacheKeys); err != nil {
-				c.onError(ctx, errors.Wrap(err, "putMulti:cacher2 cache.DeleteMulti"))
-			}
 		}()
 
 		if err := c.cacher.SetMulti(ctx,
@@ -149,8 +145,25 @@ func (c *Client) putMulti(ctx context.Context,
 			return nil, err
 		}
 
+		if putMultiHook != nil {
+			if err := putMultiHook(); err != nil {
+				return keys, err
+			}
+		}
+	}
+	if c.cacher2 != nil {
+		lockCacheKeys2, lockCacheItems2 := getCacheLocks2(ctx, keys)
+
+		defer func() {
+			// Remove the locks.
+			if err := c.cacher2.DeleteMulti(ctx,
+				lockCacheKeys2); err != nil {
+				c.onError(ctx, errors.Wrap(err, "putMulti:cacher2 cache.DeleteMulti"))
+			}
+		}()
+
 		if err := c.cacher2.SetMulti(ctx,
-			lockCacheItems); err != nil {
+			lockCacheItems2); err != nil {
 			return nil, err
 		}
 

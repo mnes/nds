@@ -415,9 +415,12 @@ func (c *Client) loadDatastore(ctx context.Context, cacheItems []cacheItem,
 
 func (c *Client) saveCache(ctx context.Context, cacheItems []cacheItem) {
 	saveItems := make([]*Item, 0, len(cacheItems))
+	saveItems2 := make([]*Item, 0, len(cacheItems))
 	for _, cacheItem := range cacheItems {
 		if cacheItem.state == internalLock {
 			saveItems = append(saveItems, cacheItem.item)
+			cacheItem.cacheKey = createCacheKey2(ctx, cacheItem.key)
+			saveItems2 = append(saveItems2, cacheItem.item)
 		}
 	}
 
@@ -429,7 +432,7 @@ func (c *Client) saveCache(ctx context.Context, cacheItems []cacheItem) {
 		c.onError(ctx, errors.Wrap(err, "nds:saveCache CompareAndSwapMulti"))
 	}
 
-	if err := c.cacher2.CompareAndSwapMulti(ctx, saveItems); err != nil {
+	if err := c.cacher2.CompareAndSwapMulti(ctx, saveItems2); err != nil {
 		c.onError(ctx, errors.Wrap(err, "nds:saveCache:cacher2 CompareAndSwapMulti"))
 	}
 }
