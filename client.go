@@ -70,5 +70,5 @@ func (c *Client) onError(ctx context.Context, err error) {
 		c.onErrorFn(ctx, err)
 		return
 	}
-	log.Infof(ctx, "nds err:%v", err.Error())
+	log.Warningf(ctx, "nds err:%v", err)
 }
