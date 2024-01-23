@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/datastore"
+	"github.com/mnes/logger/log"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
@@ -429,10 +430,12 @@ func (c *Client) saveCache(ctx context.Context, cacheItems []cacheItem) {
 	}
 
 	if err := c.cacher.CompareAndSwapMulti(ctx, saveItems); err != nil {
+		log.Warningf(ctx, "nds err:%v", err)
 		c.onError(ctx, errors.Wrap(err, "nds:saveCache CompareAndSwapMulti"))
 	}
 	if c.cacher2 != nil {
 		if err := c.cacher2.CompareAndSwapMulti(ctx, saveItems2); err != nil {
+			log.Warningf(ctx, "nds err:%v", err)
 			c.onError(ctx, errors.Wrap(err, "nds:saveCache:cacher2 CompareAndSwapMulti"))
 		}
 	}
