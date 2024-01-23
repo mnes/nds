@@ -419,7 +419,7 @@ func (c *Client) saveCache(ctx context.Context, cacheItems []cacheItem) {
 	for _, cacheItem := range cacheItems {
 		if cacheItem.state == internalLock {
 			saveItems = append(saveItems, cacheItem.item)
-			cacheItem.cacheKey = createCacheKey2(ctx, cacheItem.key)
+			cacheItem.item.Key = createCacheKey2(ctx, cacheItem.key)
 			saveItems2 = append(saveItems2, cacheItem.item)
 		}
 	}

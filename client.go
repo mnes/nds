@@ -2,7 +2,8 @@ package nds
 
 import (
 	"context"
-	"log"
+
+	"github.com/mnes/logger/log"
 
 	"cloud.google.com/go/datastore"
 )
@@ -69,5 +70,5 @@ func (c *Client) onError(ctx context.Context, err error) {
 		c.onErrorFn(ctx, err)
 		return
 	}
-	log.Println(err)
+	log.Infof(ctx, "nds err:%v", err.Error())
 }
