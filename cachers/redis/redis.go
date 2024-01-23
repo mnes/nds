@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mnes/logger/log"
 	"github.com/opencensus-integrations/redigo/redis"
 
 	"github.com/qedus/nds/v2"
@@ -180,6 +181,7 @@ func (b *backend) CompareAndSwapMulti(ctx context.Context, items []*nds.Item) (e
 	redisConn := b.store.GetWithContext(ctx).(redis.ConnWithContext)
 	defer func() {
 		if cerr := redisConn.CloseContext(ctx); cerr != nil && err == nil {
+			log.Warningf(ctx, "nds redis err:%v", err)
 			err = cerr
 		}
 	}()
@@ -241,9 +243,11 @@ func (b *backend) CompareAndSwapMulti(ctx context.Context, items []*nds.Item) (e
 			if me[i] != nil {
 				// We couldn't queue the command so don't expect it's response
 				hasErr = true
+				log.Warningf(ctx, "nds redis err:%v", me[i])
 				continue
 			}
 			if _, err := redis.String(redisConn.ReceiveContext(ctx)); err != nil {
+				log.Warningf(ctx, "nds redis err:%v", err)
 				if err == redis.ErrNil {
 					me[i] = nds.ErrNotStored
 				} else if err.Error() == "cas conflict" {
