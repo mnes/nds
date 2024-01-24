@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"cloud.google.com/go/datastore"
-	"github.com/mnes/logger/log"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
@@ -416,12 +415,9 @@ func (c *Client) loadDatastore(ctx context.Context, cacheItems []cacheItem,
 
 func (c *Client) saveCache(ctx context.Context, cacheItems []cacheItem) {
 	saveItems := make([]*Item, 0, len(cacheItems))
-	saveItems2 := make([]*Item, 0, len(cacheItems))
 	for _, cacheItem := range cacheItems {
 		if cacheItem.state == internalLock {
 			saveItems = append(saveItems, cacheItem.item)
-			cacheItem.item.Key = createCacheKey2(ctx, cacheItem.key)
-			saveItems2 = append(saveItems2, cacheItem.item)
 		}
 	}
 
@@ -430,13 +426,11 @@ func (c *Client) saveCache(ctx context.Context, cacheItems []cacheItem) {
 	}
 
 	if err := c.cacher.CompareAndSwapMulti(ctx, saveItems); err != nil {
-		log.Warningf(ctx, "nds err:%v", err)
-		c.onError(ctx, errors.Wrap(err, "nds:saveCache CompareAndSwapMulti"))
+		c.onError(ctx, errors.Wrap(err, "nds:saveCache cacher CompareAndSwapMulti"))
 	}
 	if c.cacher2 != nil {
-		if err := c.cacher2.CompareAndSwapMulti(ctx, saveItems2); err != nil {
-			log.Warningf(ctx, "nds err:%v", err)
-			c.onError(ctx, errors.Wrap(err, "nds:saveCache:cacher2 CompareAndSwapMulti"))
+		if err := c.cacher2.CompareAndSwapMulti(ctx, saveItems); err != nil {
+			c.onError(ctx, errors.Wrap(err, "nds:saveCache cacher2 CompareAndSwapMulti"))
 		}
 	}
 }
