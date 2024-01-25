@@ -243,11 +243,9 @@ func (b *backend) CompareAndSwapMulti(ctx context.Context, items []*nds.Item) (e
 			if me[i] != nil {
 				// We couldn't queue the command so don't expect it's response
 				hasErr = true
-				log.Warningf(ctx, "nds redis err:%v", me[i])
 				continue
 			}
 			if _, err := redis.String(redisConn.ReceiveContext(ctx)); err != nil {
-				log.Warningf(ctx, "nds redis err:%v", err)
 				if err == redis.ErrNil {
 					me[i] = nds.ErrNotStored
 				} else if err.Error() == "cas conflict" {
@@ -308,7 +306,8 @@ func (b *backend) DeleteMulti(ctx context.Context, keys []string) (err error) {
 		err = nerr
 		return err
 	} else if num != int64(len(keys)) {
-		err = fmt.Errorf("redis: expected to remove %d keys, but only removed %d", len(keys), num)
+		log.Warningf(ctx, "nds err:redis: expected to remove %d keys, but only removed %d", len(keys), num)
+		err = nds.ErrCacheMiss
 		return
 	}
 
