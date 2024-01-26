@@ -152,7 +152,7 @@ func (c *Client) putMulti(ctx context.Context,
 		}
 	}
 	if c.cacher2 != nil {
-		lockCacheKeys2, lockCacheItems2 := getCacheLocks(keys)
+		lockCacheKeys2, lockCacheItems2 := getCacheLocks2(ctx, keys)
 
 		defer func() {
 			// Remove the locks.

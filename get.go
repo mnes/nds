@@ -12,6 +12,7 @@ import (
 	"cloud.google.com/go/datastore"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
+	datastore2 "google.golang.org/appengine/v2/datastore"
 )
 
 // getMultiLimit is the Google Cloud Datastore limit for the maximum number
@@ -24,6 +25,8 @@ const getMultiLimit = 1000
 var (
 	// getMultiHook exists purely for testing
 	getMultiHook func(ctx context.Context, keys []*datastore.Key, vals interface{}) error
+	// getMultiHook exists purely for testing
+	getMultiHook2 func(ctx context.Context, keys []*datastore2.Key, vals interface{}) error
 )
 
 // GetMulti works similar to datastore.GetMulti except for two important
@@ -201,7 +204,7 @@ func (c *Client) getMulti(ctx context.Context,
 		cacheItems := make([]cacheItem, num)
 		for i, key := range keys {
 			cacheItems[i].key = key
-			cacheItems[i].cacheKey = createCacheKey(key)
+			cacheItems[i].cacheKey = createCacheKey2(ctx, key)
 			cacheItems[i].val = vals.Index(i)
 			cacheItems[i].state = miss
 		}
@@ -213,7 +216,7 @@ func (c *Client) getMulti(ctx context.Context,
 
 		c.lockCache2(ctx, cacheItems)
 
-		if err := c.loadDatastore(ctx, cacheItems, vals.Type()); err != nil {
+		if err := c.loadDatastore2(ctx, cacheItems, vals.Type()); err != nil {
 			return err
 		}
 
@@ -307,13 +310,13 @@ func (c *Client) loadCache2(ctx context.Context, cacheItems []cacheItem) {
 				cacheItems[i].state = done
 				cacheItems[i].err = datastore.ErrNoSuchEntity
 			case entityItem:
-				pl := datastore.PropertyList{}
-				if err := unmarshal(item.Value, &pl); err != nil {
+				pl := datastore2.PropertyList{}
+				if err := unmarshal2(item.Value, &pl); err != nil {
 					c.onError(ctx, errors.Wrapf(err, "nds:loadCache unmarshal"))
 					cacheItems[i].state = externalLock
 					break
 				}
-				if err := setValue(cacheItems[i].val, pl, cacheItems[i].key); err == nil {
+				if err := setValue2(cacheItems[i].val, pl, cacheItems[i].key); err == nil {
 					cacheItems[i].state = done
 				} else {
 					c.onError(ctx, errors.Wrapf(err, "nds:loadCache setValue"))
@@ -480,13 +483,13 @@ func (c *Client) lockCache2(ctx context.Context, cacheItems []cacheItem) {
 						cacheItems[i].state = done
 						cacheItems[i].err = datastore.ErrNoSuchEntity
 					case entityItem:
-						pl := datastore.PropertyList{}
-						if err := unmarshal(item.Value, &pl); err != nil {
+						pl := datastore2.PropertyList{}
+						if err := unmarshal2(item.Value, &pl); err != nil {
 							c.onError(ctx, errors.Wrap(err, "nds:lockCache unmarshal"))
 							cacheItems[i].state = externalLock
 							break
 						}
-						if err := setValue(cacheItems[i].val, pl, cacheItems[i].key); err == nil {
+						if err := setValue2(cacheItems[i].val, pl, cacheItems[i].key); err == nil {
 							cacheItems[i].state = done
 						} else {
 							c.onError(ctx, errors.Wrap(err, "nds:lockCache setValue"))
@@ -560,6 +563,76 @@ func (c *Client) loadDatastore(ctx context.Context, cacheItems []cacheItem,
 			}
 
 			if err := setValue(val, pl, cacheItems[index].key); err != nil {
+				cacheItems[index].err = err
+			}
+		case datastore.ErrNoSuchEntity:
+			if cacheItems[index].state == internalLock {
+				cacheItems[index].item.Flags = noneItem
+				cacheItems[index].item.Expiration = 0
+				cacheItems[index].item.Value = []byte{}
+			}
+			cacheItems[index].err = datastore.ErrNoSuchEntity
+		default:
+			cacheItems[index].state = externalLock
+			cacheItems[index].err = me[i]
+		}
+	}
+	return nil
+}
+
+func (c *Client) loadDatastore2(ctx context.Context, cacheItems []cacheItem,
+	valsType reflect.Type) error {
+
+	keys := make([]*datastore.Key, 0, len(cacheItems))
+	vals := make([]datastore2.PropertyList, 0, len(cacheItems))
+	cacheItemsIndex := make([]int, 0, len(cacheItems))
+
+	for i, cacheItem := range cacheItems {
+		switch cacheItem.state {
+		case internalLock, externalLock:
+			keys = append(keys, cacheItem.key)
+			vals = append(vals, datastore2.PropertyList{})
+			cacheItemsIndex = append(cacheItemsIndex, i)
+		}
+	}
+
+	if getMultiHook != nil {
+		if err := getMultiHook(ctx, keys, vals); err != nil {
+			return err
+		}
+	}
+
+	if len(keys) == 0 {
+		return nil
+	}
+
+	var me datastore.MultiError
+	if err := c.Client.GetMulti(ctx, keys, vals); err == nil {
+		me = make(datastore.MultiError, len(keys))
+	} else if e, ok := err.(datastore.MultiError); ok {
+		me = e
+	} else {
+		return err
+	}
+
+	for i, index := range cacheItemsIndex {
+		switch me[i] {
+		case nil:
+			pl := vals[i]
+			val := cacheItems[index].val
+
+			if cacheItems[index].state == internalLock {
+				cacheItems[index].item.Flags = entityItem
+				cacheItems[index].item.Expiration = 0
+				if data, err := marshal2(pl); err == nil {
+					cacheItems[index].item.Value = data
+				} else {
+					cacheItems[index].state = externalLock
+					c.onError(ctx, errors.Wrap(err, "nds:loadDatastore marshal"))
+				}
+			}
+
+			if err := setValue2(val, pl, cacheItems[index].key); err != nil {
 				cacheItems[index].err = err
 			}
 		case datastore.ErrNoSuchEntity:
