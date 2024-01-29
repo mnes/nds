@@ -13,6 +13,7 @@ import (
 	"cloud.google.com/go/datastore"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
+	appengine "google.golang.org/appengine/v2"
 	datastore2 "google.golang.org/appengine/v2/datastore"
 )
 
@@ -629,10 +630,10 @@ func (c *Client) loadDatastore2(ctx context.Context, cacheItems []cacheItem2,
 		return nil
 	}
 
-	var me datastore.MultiError
+	var me appengine.MultiError
 	if err := datastore2.GetMulti(ctx, keys, vals); err == nil {
-		me = make(datastore.MultiError, len(keys))
-	} else if e, ok := err.(datastore.MultiError); ok {
+		me = make(appengine.MultiError, len(keys))
+	} else if e, ok := err.(appengine.MultiError); ok {
 		me = e
 	} else {
 		return err
@@ -658,13 +659,13 @@ func (c *Client) loadDatastore2(ctx context.Context, cacheItems []cacheItem2,
 			if err := setValue2(val, pl); err != nil {
 				cacheItems[index].err = err
 			}
-		case datastore.ErrNoSuchEntity:
+		case datastore2.ErrNoSuchEntity:
 			if cacheItems[index].state == internalLock {
 				cacheItems[index].item.Flags = noneItem
 				cacheItems[index].item.Expiration = 0
 				cacheItems[index].item.Value = []byte{}
 			}
-			cacheItems[index].err = datastore.ErrNoSuchEntity
+			cacheItems[index].err = datastore2.ErrNoSuchEntity
 		default:
 			cacheItems[index].state = externalLock
 			cacheItems[index].err = me[i]
