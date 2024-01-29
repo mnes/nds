@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"math/rand"
 	"reflect"
 	"sync"
@@ -162,8 +163,11 @@ type cacheItem struct {
 // including http://goo.gl/3ByVlA.
 func (c *Client) getMulti(ctx context.Context,
 	keys []*datastore.Key, vals reflect.Value) error {
+	var errs []error
+	var errsNils []bool
+	var mes []datastore.MultiError
 
-	if c.cacher != nil {
+	if c.cacher != nil && c.cacher2 != nil {
 		num := len(keys)
 		cacheItems := make([]cacheItem, num)
 		for i, key := range keys {
@@ -172,19 +176,43 @@ func (c *Client) getMulti(ctx context.Context,
 			cacheItems[i].val = vals.Index(i)
 			cacheItems[i].state = miss
 		}
+		cacheItems2 := make([]cacheItem, num)
+		for i, key := range keys {
+			cacheItems2[i].key = key
+			cacheItems2[i].cacheKey = createCacheKey2(ctx, key)
+			cacheItems2[i].val = vals.Index(i)
+			cacheItems2[i].state = miss
+		}
 
 		c.loadCache(ctx, cacheItems)
 		if err := cacheStatsByKind(ctx, cacheItems); err != nil {
-			c.onError(ctx, errors.Wrapf(err, "nds:getMulti cacheStatsByKind"))
+			c.onError(ctx, errors.Wrapf(err, "nds:getMulti cache1StatsByKind"))
+		}
+
+		c.loadCache2(ctx, cacheItems2)
+		if err := cacheStatsByKind(ctx, cacheItems2); err != nil {
+			c.onError(ctx, errors.Wrapf(err, "nds:getMulti cache2StatsByKind"))
 		}
 
 		c.lockCache(ctx, cacheItems)
+		c.lockCache2(ctx, cacheItems2)
 
 		if err := c.loadDatastore(ctx, cacheItems, vals.Type()); err != nil {
-			return err
+			errs = append(errs, err)
+		}
+		if err := c.loadDatastore2(ctx, cacheItems2, vals.Type()); err != nil {
+			errs = append(errs, err)
+		}
+		if len(errs) > 0 {
+			ecs := ""
+			for i, ec := range errs {
+				ecs += fmt.Sprintf("cacher%d:%v", i, ec.Error())
+			}
+			return fmt.Errorf("combined error:%v", ecs)
 		}
 
 		c.saveCache(ctx, cacheItems)
+		c.saveCache2(ctx, cacheItems2)
 
 		me, errsNil := make(datastore.MultiError, len(cacheItems)), true
 		for i, cacheItem := range cacheItems {
@@ -195,45 +223,31 @@ func (c *Client) getMulti(ctx context.Context,
 		}
 
 		if errsNil {
-			return nil
+			errsNils = append(errsNils, errsNil)
 		}
-		return me
-	}
-	if c.cacher2 != nil {
-		num := len(keys)
-		cacheItems := make([]cacheItem, num)
-		for i, key := range keys {
-			cacheItems[i].key = key
-			cacheItems[i].cacheKey = createCacheKey2(ctx, key)
-			cacheItems[i].val = vals.Index(i)
-			cacheItems[i].state = miss
-		}
+		mes = append(mes, me)
 
-		c.loadCache2(ctx, cacheItems)
-		if err := cacheStatsByKind(ctx, cacheItems); err != nil {
-			c.onError(ctx, errors.Wrapf(err, "nds:getMulti cacheStatsByKind"))
-		}
-
-		c.lockCache2(ctx, cacheItems)
-
-		if err := c.loadDatastore2(ctx, cacheItems, vals.Type()); err != nil {
-			return err
-		}
-
-		c.saveCache2(ctx, cacheItems)
-
-		me, errsNil := make(datastore.MultiError, len(cacheItems)), true
-		for i, cacheItem := range cacheItems {
+		me2, errsNil2 := make(datastore.MultiError, len(cacheItems2)), true
+		for i, cacheItem := range cacheItems2 {
 			if cacheItem.err != nil {
-				me[i] = cacheItem.err
-				errsNil = false
+				me2[i] = cacheItem.err
+				errsNil2 = false
 			}
 		}
 
-		if errsNil {
+		if errsNil2 {
+			errsNils = append(errsNils, errsNil2)
+		}
+		mes = append(mes, me2)
+
+		if len(errsNils) > 1 {
 			return nil
 		}
-		return me
+		mesc := ""
+		for i, mec := range mes {
+			mesc += fmt.Sprintf("cacher%d:%v", i, mec.Error())
+		}
+		return fmt.Errorf("combined error:%v", mesc)
 	}
 	return c.Client.GetMulti(ctx, keys, vals.Interface())
 }
