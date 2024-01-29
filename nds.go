@@ -165,6 +165,10 @@ func createCacheKey2(c context.Context, k *datastore.Key) string {
 	return cacheKey
 }
 
+func appengineKey(c context.Context, k *datastore.Key) *datastore2.Key {
+	return datastore2.NewKey(c, k.Kind, k.Name, 0, nil)
+}
+
 func marshalPropertyList(pl datastore.PropertyList) ([]byte, error) {
 	buf := bytes.Buffer{}
 	if err := gob.NewEncoder(&buf).Encode(&pl); err != nil {
@@ -215,7 +219,7 @@ func setValue(val reflect.Value, pl datastore.PropertyList, key *datastore.Key) 
 	return datastore.LoadStruct(val.Interface(), pl)
 }
 
-func setValue2(val reflect.Value, pl datastore2.PropertyList, key *datastore.Key) error {
+func setValue2(val reflect.Value, pl datastore2.PropertyList) error {
 
 	valType := checkValueType2(val.Type())
 

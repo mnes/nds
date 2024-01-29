@@ -155,6 +155,18 @@ type cacheItem struct {
 	state cacheState
 }
 
+type cacheItem2 struct {
+	key      *datastore2.Key
+	cacheKey string
+
+	val reflect.Value
+	err error
+
+	item *Item
+
+	state cacheState
+}
+
 // getMulti attempts to get entities from the cache, then the datastore. It also
 // tries to replenish the cache if needed available. It does this in such a way
 // that GetMulti will never get stale results even if the function, datastore or
@@ -176,9 +188,9 @@ func (c *Client) getMulti(ctx context.Context,
 			cacheItems[i].val = vals.Index(i)
 			cacheItems[i].state = miss
 		}
-		cacheItems2 := make([]cacheItem, num)
+		cacheItems2 := make([]cacheItem2, num)
 		for i, key := range keys {
-			cacheItems2[i].key = key
+			cacheItems2[i].key = appengineKey(ctx, key)
 			cacheItems2[i].cacheKey = createCacheKey2(ctx, key)
 			cacheItems2[i].val = vals.Index(i)
 			cacheItems2[i].state = miss
@@ -190,9 +202,6 @@ func (c *Client) getMulti(ctx context.Context,
 		}
 
 		c.loadCache2(ctx, cacheItems2)
-		if err := cacheStatsByKind(ctx, cacheItems2); err != nil {
-			c.onError(ctx, errors.Wrapf(err, "nds:getMulti cache2StatsByKind"))
-		}
 
 		c.lockCache(ctx, cacheItems)
 		c.lockCache2(ctx, cacheItems2)
@@ -299,7 +308,7 @@ func (c *Client) loadCache(ctx context.Context, cacheItems []cacheItem) {
 }
 
 // loadCache will return the # of cache hits
-func (c *Client) loadCache2(ctx context.Context, cacheItems []cacheItem) {
+func (c *Client) loadCache2(ctx context.Context, cacheItems []cacheItem2) {
 
 	cacheKeys := make([]string, len(cacheItems))
 	for i, cacheItem := range cacheItems {
@@ -330,7 +339,7 @@ func (c *Client) loadCache2(ctx context.Context, cacheItems []cacheItem) {
 					cacheItems[i].state = externalLock
 					break
 				}
-				if err := setValue2(cacheItems[i].val, pl, cacheItems[i].key); err == nil {
+				if err := setValue2(cacheItems[i].val, pl); err == nil {
 					cacheItems[i].state = done
 				} else {
 					c.onError(ctx, errors.Wrapf(err, "nds:loadCache setValue"))
@@ -442,7 +451,7 @@ func (c *Client) lockCache(ctx context.Context, cacheItems []cacheItem) {
 	}
 }
 
-func (c *Client) lockCache2(ctx context.Context, cacheItems []cacheItem) {
+func (c *Client) lockCache2(ctx context.Context, cacheItems []cacheItem2) {
 
 	lockItems := make([]*Item, 0, len(cacheItems))
 	lockCacheKeys := make([]string, 0, len(cacheItems))
@@ -503,7 +512,7 @@ func (c *Client) lockCache2(ctx context.Context, cacheItems []cacheItem) {
 							cacheItems[i].state = externalLock
 							break
 						}
-						if err := setValue2(cacheItems[i].val, pl, cacheItems[i].key); err == nil {
+						if err := setValue2(cacheItems[i].val, pl); err == nil {
 							cacheItems[i].state = done
 						} else {
 							c.onError(ctx, errors.Wrap(err, "nds:lockCache setValue"))
@@ -594,10 +603,10 @@ func (c *Client) loadDatastore(ctx context.Context, cacheItems []cacheItem,
 	return nil
 }
 
-func (c *Client) loadDatastore2(ctx context.Context, cacheItems []cacheItem,
+func (c *Client) loadDatastore2(ctx context.Context, cacheItems []cacheItem2,
 	valsType reflect.Type) error {
 
-	keys := make([]*datastore.Key, 0, len(cacheItems))
+	keys := make([]*datastore2.Key, 0, len(cacheItems))
 	vals := make([]datastore2.PropertyList, 0, len(cacheItems))
 	cacheItemsIndex := make([]int, 0, len(cacheItems))
 
@@ -610,8 +619,8 @@ func (c *Client) loadDatastore2(ctx context.Context, cacheItems []cacheItem,
 		}
 	}
 
-	if getMultiHook != nil {
-		if err := getMultiHook(ctx, keys, vals); err != nil {
+	if getMultiHook2 != nil {
+		if err := getMultiHook2(ctx, keys, vals); err != nil {
 			return err
 		}
 	}
@@ -621,7 +630,7 @@ func (c *Client) loadDatastore2(ctx context.Context, cacheItems []cacheItem,
 	}
 
 	var me datastore.MultiError
-	if err := c.Client.GetMulti(ctx, keys, vals); err == nil {
+	if err := datastore2.GetMulti(ctx, keys, vals); err == nil {
 		me = make(datastore.MultiError, len(keys))
 	} else if e, ok := err.(datastore.MultiError); ok {
 		me = e
@@ -646,7 +655,7 @@ func (c *Client) loadDatastore2(ctx context.Context, cacheItems []cacheItem,
 				}
 			}
 
-			if err := setValue2(val, pl, cacheItems[index].key); err != nil {
+			if err := setValue2(val, pl); err != nil {
 				cacheItems[index].err = err
 			}
 		case datastore.ErrNoSuchEntity:
@@ -680,7 +689,7 @@ func (c *Client) saveCache(ctx context.Context, cacheItems []cacheItem) {
 	}
 }
 
-func (c *Client) saveCache2(ctx context.Context, cacheItems []cacheItem) {
+func (c *Client) saveCache2(ctx context.Context, cacheItems []cacheItem2) {
 	saveItems := make([]*Item, 0, len(cacheItems))
 	for _, cacheItem := range cacheItems {
 		if cacheItem.state == internalLock {
