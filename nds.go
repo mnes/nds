@@ -96,6 +96,26 @@ func checkValueType(valType reflect.Type) valueType {
 	return valueTypeInvalid
 }
 
+func checkValueType2(valType reflect.Type) valueType {
+
+	if reflect.PtrTo(valType).Implements(typeOfPropertyLoadSaver) {
+		return valueTypePropertyLoadSaver
+	}
+
+	switch valType.Kind() {
+	case reflect.Struct:
+		return valueTypeStruct
+	case reflect.Interface:
+		return valueTypeInterface
+	case reflect.Ptr:
+		valType = valType.Elem()
+		if valType.Kind() == reflect.Struct {
+			return valueTypeStructPtr
+		}
+	}
+	return valueTypeInvalid
+}
+
 func checkKeysValues(keys []*datastore.Key, values reflect.Value) error {
 	if values.Kind() != reflect.Slice {
 		return errors.New("nds: values is not a slice")
@@ -197,9 +217,9 @@ func setValue(val reflect.Value, pl datastore.PropertyList, key *datastore.Key) 
 
 func setValue2(val reflect.Value, pl datastore2.PropertyList, key *datastore.Key) error {
 
-	valType := checkValueType(val.Type())
+	valType := checkValueType2(val.Type())
 
-	if valType == valueTypePropertyLoadSaver || valType == valueTypeStruct || valType == valueTypeKeyLoader {
+	if valType == valueTypePropertyLoadSaver || valType == valueTypeStruct {
 		val = val.Addr()
 	}
 
@@ -208,14 +228,7 @@ func setValue2(val reflect.Value, pl datastore2.PropertyList, key *datastore.Key
 	}
 
 	if pls, ok := val.Interface().(datastore2.PropertyLoadSaver); ok {
-		err := pls.Load(pl)
-		if err != nil {
-			return err
-		}
-		if e, ok := val.Interface().(datastore.KeyLoader); ok {
-			err = e.LoadKey(key)
-		}
-		return err
+		return pls.Load(pl)
 	}
 
 	return datastore2.LoadStruct(val.Interface(), pl)
