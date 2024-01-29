@@ -2,6 +2,7 @@ package nds
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"sync"
 
@@ -129,8 +130,10 @@ func (c *Client) Put(ctx context.Context,
 // putMulti locks the items in cache, puts the entities into the datastore, and then deletes the locks in cache.
 func (c *Client) putMulti(ctx context.Context,
 	keys []*datastore.Key, vals interface{}) ([]*datastore.Key, error) {
-	if c.cacher != nil {
+	if c.cacher != nil && c.cacher2 != nil {
 		lockCacheKeys, lockCacheItems := getCacheLocks(keys)
+		lockCacheKeys2, lockCacheItems2 := getCacheLocks2(ctx, keys)
+		var errs []error
 
 		defer func() {
 			// Remove the locks.
@@ -139,21 +142,6 @@ func (c *Client) putMulti(ctx context.Context,
 				c.onError(ctx, errors.Wrap(err, "putMulti cache.DeleteMulti"))
 			}
 		}()
-
-		if err := c.cacher.SetMulti(ctx,
-			lockCacheItems); err != nil {
-			return nil, err
-		}
-
-		if putMultiHook != nil {
-			if err := putMultiHook(); err != nil {
-				return keys, err
-			}
-		}
-	}
-	if c.cacher2 != nil {
-		lockCacheKeys2, lockCacheItems2 := getCacheLocks2(ctx, keys)
-
 		defer func() {
 			// Remove the locks.
 			if err := c.cacher2.DeleteMulti(ctx,
@@ -162,9 +150,21 @@ func (c *Client) putMulti(ctx context.Context,
 			}
 		}()
 
+		if err := c.cacher.SetMulti(ctx,
+			lockCacheItems); err != nil {
+			errs = append(errs, err)
+		}
+
 		if err := c.cacher2.SetMulti(ctx,
 			lockCacheItems2); err != nil {
-			return nil, err
+			errs = append(errs, err)
+		}
+		if len(errs) > 0 {
+			ecs := ""
+			for i, ec := range errs {
+				ecs += fmt.Sprintf("cacher%d:%v", i, ec.Error())
+			}
+			return nil, fmt.Errorf("combined error:%v", ecs)
 		}
 
 		if putMultiHook != nil {

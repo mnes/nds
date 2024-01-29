@@ -2,6 +2,7 @@ package nds
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"cloud.google.com/go/datastore"
@@ -63,23 +64,28 @@ func (c *Client) Delete(ctx context.Context, key *datastore.Key) error {
 // deleteMulti will batch delete keys by first locking the corresponding items in the
 // cache then deleting them from datastore.
 func (c *Client) deleteMulti(ctx context.Context, keys []*datastore.Key) error {
-	if c.cacher != nil {
+	if c.cacher != nil && c.cacher2 != nil {
 		_, lockCacheItems := getCacheLocks(keys)
+		_, lockCacheItems2 := getCacheLocks2(ctx, keys)
+		var errs []error
 
 		// Make sure we can lock the cache with no errors before deleting.
 		if err := c.cacher.SetMulti(ctx,
 			lockCacheItems); err != nil {
-			return err
+			errs = append(errs, err)
 		}
-	}
-
-	if c.cacher2 != nil {
-		_, lockCacheItems2 := getCacheLocks2(ctx, keys)
 
 		// Make sure we can lock the cache with no errors before deleting.
 		if err := c.cacher2.SetMulti(ctx,
 			lockCacheItems2); err != nil {
-			return err
+			errs = append(errs, err)
+		}
+		if len(errs) > 0 {
+			ecs := ""
+			for i, ec := range errs {
+				ecs += fmt.Sprintf("cacher%d:%v", i, ec.Error())
+			}
+			return fmt.Errorf("combined error:%v", ecs)
 		}
 	}
 
