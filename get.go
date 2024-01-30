@@ -264,6 +264,7 @@ func init() {
 func (c *Client) lockCache(ctx context.Context, cacheItems []cacheItem) {
 
 	lockItems := make([]*Item, 0, len(cacheItems))
+	lockItems2 := make([]*Item, 0, len(cacheItems))
 	lockCacheKeys := make([]string, 0, len(cacheItems))
 	for i, cacheItem := range cacheItems {
 		if cacheItem.state == miss {
@@ -276,6 +277,11 @@ func (c *Client) lockCache(ctx context.Context, cacheItems []cacheItem) {
 			}
 			cacheItems[i].item = item
 			lockItems = append(lockItems, item)
+
+			shallowCopy := item
+			shallowCopy.Key = createCacheKey2(ctx, cacheItem.key)
+			lockItems2 = append(lockItems2, shallowCopy)
+
 			lockCacheKeys = append(lockCacheKeys, cacheItem.cacheKey)
 		}
 	}
@@ -284,6 +290,10 @@ func (c *Client) lockCache(ctx context.Context, cacheItems []cacheItem) {
 		// We don't care if there are errors here.
 		if err := c.cacher.AddMulti(ctx, lockItems); err != nil {
 			c.onError(ctx, errors.Wrap(err, "nds:lockCache AddMulti"))
+		}
+
+		if err := c.cacher2.AddMulti(ctx, lockItems2); err != nil {
+			c.onError(ctx, errors.Wrap(err, "nds:lockCache2 AddMulti"))
 		}
 
 		// Get the items again so we can use CAS when updating the cache.
@@ -415,9 +425,15 @@ func (c *Client) loadDatastore(ctx context.Context, cacheItems []cacheItem,
 
 func (c *Client) saveCache(ctx context.Context, cacheItems []cacheItem) {
 	saveItems := make([]*Item, 0, len(cacheItems))
+	saveItems2 := make([]*Item, 0, len(cacheItems))
 	for _, cacheItem := range cacheItems {
 		if cacheItem.state == internalLock {
 			saveItems = append(saveItems, cacheItem.item)
+			if c.cacher2 != nil {
+				shallowCopy := cacheItem.item
+				shallowCopy.Key = createCacheKey2(ctx, cacheItem.key)
+				saveItems2 = append(saveItems2, shallowCopy)
+			}
 		}
 	}
 
@@ -429,7 +445,7 @@ func (c *Client) saveCache(ctx context.Context, cacheItems []cacheItem) {
 		c.onError(ctx, errors.Wrap(err, "nds:saveCache cacher CompareAndSwapMulti"))
 	}
 	if c.cacher2 != nil {
-		if err := c.cacher2.CompareAndSwapMulti(ctx, saveItems); err != nil {
+		if err := c.cacher2.CompareAndSwapMulti(ctx, saveItems2); err != nil {
 			c.onError(ctx, errors.Wrap(err, "nds:saveCache cacher2 CompareAndSwapMulti"))
 		}
 	}

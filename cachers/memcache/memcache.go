@@ -6,7 +6,6 @@ import (
 	"google.golang.org/appengine/v2"
 	"google.golang.org/appengine/v2/memcache"
 
-	"github.com/mnes/logger/log"
 	"github.com/qedus/nds/v2"
 )
 
@@ -77,7 +76,6 @@ func convertFromMemcacheItems(items map[string]*memcache.Item) map[string]*nds.I
 }
 
 func convertToNDSMultiError(ctx context.Context, err error) error {
-	log.Warningf(ctx, "nds err:%v", err)
 	if ame, ok := err.(appengine.MultiError); ok {
 		me := make(nds.MultiError, len(ame))
 		for i, aerr := range ame {

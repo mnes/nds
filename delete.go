@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"cloud.google.com/go/datastore"
+	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
 
@@ -67,18 +68,21 @@ func (c *Client) deleteMulti(ctx context.Context, keys []*datastore.Key) error {
 		_, lockCacheItems := getCacheLocks(keys)
 
 		// Make sure we can lock the cache with no errors before deleting.
-		if err := c.cacher.SetMulti(ctx,
-			lockCacheItems); err != nil {
-			return err
+		err := c.cacher.SetMulti(ctx,
+			lockCacheItems)
+		if err != nil {
+			c.onError(ctx, errors.Wrap(err, "deleteMulti:cacher cacher.SetMulti"))
 		}
-	}
+		if c.cacher2 != nil {
+			_, lockCacheItems2 := getCacheLocks2(ctx, keys)
 
-	if c.cacher2 != nil {
-		_, lockCacheItems2 := getCacheLocks2(ctx, keys)
-
-		// Make sure we can lock the cache with no errors before deleting.
-		if err := c.cacher2.SetMulti(ctx,
-			lockCacheItems2); err != nil {
+			// Make sure we can lock the cache with no errors before deleting.
+			if err := c.cacher2.SetMulti(ctx,
+				lockCacheItems2); err != nil {
+				return err
+			}
+		}
+		if err != nil {
 			return err
 		}
 	}

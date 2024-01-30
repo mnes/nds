@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/mnes/logger/log"
+
 	"cloud.google.com/go/datastore"
 	datastore2 "google.golang.org/appengine/v2/datastore"
 )
@@ -140,6 +142,7 @@ func createCacheKey2(c context.Context, k *datastore.Key) string {
 		hash := sha1.Sum([]byte(cacheKey))
 		cacheKey = hex.EncodeToString(hash[:])
 	}
+	log.Infof(c, "cacheKey2:%v", cacheKey)
 	return cacheKey
 }
 
