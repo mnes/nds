@@ -12,6 +12,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/memcache"
 )
 
@@ -131,12 +132,13 @@ func checkKeysValues(keys []*datastore.Key, values reflect.Value) error {
 	return nil
 }
 
-func createMemcacheKey(key *datastore.Key) string {
+func createMemcacheKey(c context.Context, key *datastore.Key) string {
 	memcacheKey := memcachePrefix + key.Encode()
 	if len(memcacheKey) > memcacheMaxKeySize {
 		hash := sha1.Sum([]byte(memcacheKey))
 		memcacheKey = hex.EncodeToString(hash[:])
 	}
+	log.Infof(c, "memcacheKey: %v", memcacheKey)
 	return memcacheKey
 }
 

@@ -65,7 +65,7 @@ func deleteMulti(c context.Context, keys []*datastore.Key) error {
 		}
 
 		item := &memcache.Item{
-			Key:        createMemcacheKey(key),
+			Key:        createMemcacheKey(c, key),
 			Flags:      lockItem,
 			Value:      itemLock(),
 			Expiration: memcacheLockTime,

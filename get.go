@@ -150,7 +150,7 @@ func getMulti(c context.Context,
 	cacheItems := make([]cacheItem, len(keys))
 	for i, key := range keys {
 		cacheItems[i].key = key
-		cacheItems[i].memcacheKey = createMemcacheKey(key)
+		cacheItems[i].memcacheKey = createMemcacheKey(c, key)
 		cacheItems[i].val = vals.Index(i)
 		cacheItems[i].state = miss
 	}
