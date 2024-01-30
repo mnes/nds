@@ -124,7 +124,7 @@ func putMulti(c context.Context,
 	for _, key := range keys {
 		if !key.Incomplete() {
 			item := &memcache.Item{
-				Key:        createMemcacheKey(key),
+				Key:        createMemcacheKey(c, key),
 				Flags:      lockItem,
 				Value:      itemLock(),
 				Expiration: memcacheLockTime,
