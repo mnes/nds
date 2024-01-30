@@ -17,21 +17,21 @@ func NewCacher() nds.Cacher {
 }
 
 func (m *backend) AddMulti(ctx context.Context, items []*nds.Item) error {
-	return convertToNDSMultiError(ctx, memcache.AddMulti(ctx, convertToMemcacheItems(items)))
+	return convertToNDSMultiError(memcache.AddMulti(ctx, convertToMemcacheItems(items)))
 }
 
 func (m *backend) CompareAndSwapMulti(ctx context.Context, items []*nds.Item) error {
-	return convertToNDSMultiError(ctx, memcache.CompareAndSwapMulti(ctx, convertToMemcacheItems(items)))
+	return convertToNDSMultiError(memcache.CompareAndSwapMulti(ctx, convertToMemcacheItems(items)))
 }
 
 func (m *backend) DeleteMulti(ctx context.Context, keys []string) error {
-	return convertToNDSMultiError(ctx, memcache.DeleteMulti(ctx, keys))
+	return convertToNDSMultiError(memcache.DeleteMulti(ctx, keys))
 }
 
 func (m *backend) GetMulti(ctx context.Context, keys []string) (map[string]*nds.Item, error) {
 	items, err := memcache.GetMulti(ctx, keys)
 	if err != nil {
-		return nil, convertToNDSMultiError(ctx, err)
+		return nil, convertToNDSMultiError(err)
 	}
 	return convertFromMemcacheItems(items), nil
 }
@@ -75,7 +75,7 @@ func convertFromMemcacheItems(items map[string]*memcache.Item) map[string]*nds.I
 	return newItems
 }
 
-func convertToNDSMultiError(ctx context.Context, err error) error {
+func convertToNDSMultiError(err error) error {
 	if ame, ok := err.(appengine.MultiError); ok {
 		me := make(nds.MultiError, len(ame))
 		for i, aerr := range ame {
