@@ -278,7 +278,8 @@ func (c *Client) lockCache(ctx context.Context, cacheItems []cacheItem) {
 			cacheItems[i].item = item
 			lockItems = append(lockItems, item)
 
-			shallowCopy := item
+			var shallowCopy = &Item{}
+			CloneValue(item, shallowCopy)
 			shallowCopy.Key = createCacheKey2(ctx, cacheItem.key)
 			lockItems2 = append(lockItems2, shallowCopy)
 
@@ -430,7 +431,8 @@ func (c *Client) saveCache(ctx context.Context, cacheItems []cacheItem) {
 		if cacheItem.state == internalLock {
 			saveItems = append(saveItems, cacheItem.item)
 			if c.cacher2 != nil {
-				shallowCopy := cacheItem.item
+				var shallowCopy = &Item{}
+				CloneValue(cacheItem.key, shallowCopy)
 				shallowCopy.Key = createCacheKey2(ctx, cacheItem.key)
 				saveItems2 = append(saveItems2, shallowCopy)
 			}
