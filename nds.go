@@ -44,7 +44,6 @@ var (
 // paths by substituting them with error producing ones.
 var (
 	marshal    = marshalPropertyList
-	marshal2   = marshalPropertyList2
 	unmarshal  = unmarshalPropertyList
 	unmarshal2 = unmarshalPropertyList2
 )
@@ -167,19 +166,7 @@ func createCacheKey2(c context.Context, k *datastore.Key) string {
 	return cacheKey
 }
 
-func appengineKey(c context.Context, k *datastore.Key) *datastore2.Key {
-	return datastore2.NewKey(c, k.Kind, k.Name, 0, nil)
-}
-
 func marshalPropertyList(pl datastore.PropertyList) ([]byte, error) {
-	buf := bytes.Buffer{}
-	if err := gob.NewEncoder(&buf).Encode(&pl); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-func marshalPropertyList2(pl datastore2.PropertyList) ([]byte, error) {
 	buf := bytes.Buffer{}
 	if err := gob.NewEncoder(&buf).Encode(&pl); err != nil {
 		return nil, err
@@ -279,6 +266,31 @@ func getCacheLocks(keys []*datastore.Key) ([]string, []*Item) {
 		// datastore.Delete will raise the appropriate error.
 		if key != nil && !key.Incomplete() {
 			cacheKey := createCacheKey(key)
+			if _, found := set[cacheKey]; !found {
+				item := &Item{
+					Key:        cacheKey,
+					Flags:      lockItem,
+					Value:      itemLock(),
+					Expiration: cacheLockTime,
+				}
+				lockCacheItems = append(lockCacheItems, item)
+				lockCacheKeys = append(lockCacheKeys, item.Key)
+				set[cacheKey] = nil
+			}
+		}
+	}
+	return lockCacheKeys, lockCacheItems
+}
+
+func getCacheLocks2(ctx context.Context, keys []*datastore.Key) ([]string, []*Item) {
+	lockCacheKeys := make([]string, 0, len(keys))
+	lockCacheItems := make([]*Item, 0, len(keys))
+	set := make(map[string]interface{})
+	for _, key := range keys {
+		// Worst case scenario is that we lock the entity for cacheLockTime.
+		// datastore.Delete will raise the appropriate error.
+		if key != nil && !key.Incomplete() {
+			cacheKey := createCacheKey2(ctx, key)
 			if _, found := set[cacheKey]; !found {
 				item := &Item{
 					Key:        cacheKey,
