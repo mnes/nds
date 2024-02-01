@@ -432,7 +432,7 @@ func (c *Client) saveCache(ctx context.Context, cacheItems []cacheItem) {
 			saveItems = append(saveItems, cacheItem.item)
 			if c.cacher2 != nil {
 				var shallowCopy = &Item{}
-				CloneValue(cacheItem.key, shallowCopy)
+				CloneValue(cacheItem.item, shallowCopy)
 				shallowCopy.Key = createCacheKey2(ctx, cacheItem.key)
 				saveItems2 = append(saveItems2, shallowCopy)
 			}
