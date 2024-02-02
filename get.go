@@ -178,14 +178,14 @@ func (c *Client) getMulti(ctx context.Context,
 			cacheItems2[i].state = miss
 		}
 
-		c.loadCache(ctx, cacheItems)
+		c.loadCache(ctx, cacheItems) // redis 8/10
 		if err := cacheStatsByKind(ctx, cacheItems); err != nil {
 			c.onError(ctx, errors.Wrapf(err, "nds:getMulti cacheStatsByKind"))
 		}
-		c.loadCache2(ctx, cacheItems2)
+		c.loadCache2(ctx, cacheItems2) //memcache 7/10
 
-		c.lockCache(ctx, cacheItems)
-		c.lockCache2(ctx, cacheItems2)
+		c.lockCache(ctx, cacheItems)   // redis 2 miss
+		c.lockCache2(ctx, cacheItems2) // memcache 3 miss
 
 		err := c.loadDatastore(ctx, cacheItems, vals.Type(), cacheItems2)
 		if err != nil {
@@ -498,11 +498,11 @@ func (c *Client) lockCache2(ctx context.Context, cacheItems []cacheItem) {
 func (c *Client) loadDatastore(ctx context.Context, cacheItems []cacheItem,
 	valsType reflect.Type, cacheItems2 []cacheItem) error {
 
-	keys := make([]*datastore.Key, 0, len(cacheItems))
-	vals := make([]datastore.PropertyList, 0, len(cacheItems))
-	cacheItemsIndex := make([]int, 0, len(cacheItems))
+	keys := make([]*datastore.Key, 0, len(cacheItems2))
+	vals := make([]datastore.PropertyList, 0, len(cacheItems2))
+	cacheItemsIndex := make([]int, 0, len(cacheItems2))
 
-	for i, cacheItem := range cacheItems {
+	for i, cacheItem := range cacheItems2 {
 		switch cacheItem.state {
 		case internalLock, externalLock:
 			keys = append(keys, cacheItem.key)
