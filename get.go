@@ -12,7 +12,6 @@ import (
 	"cloud.google.com/go/datastore"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
-	datastore2 "google.golang.org/appengine/v2/datastore"
 )
 
 // getMultiLimit is the Google Cloud Datastore limit for the maximum number
@@ -295,13 +294,13 @@ func (c *Client) loadCache2(ctx context.Context, cacheItems []cacheItem) {
 				cacheItems[i].state = done
 				cacheItems[i].err = datastore.ErrNoSuchEntity
 			case entityItem:
-				pl := datastore2.PropertyList{}
-				if err := unmarshal2(item.Value, &pl); err != nil {
+				pl := datastore.PropertyList{}
+				if err := unmarshal(item.Value, &pl); err != nil {
 					c.onError(ctx, errors.Wrapf(err, "nds:loadCache2 unmarshal"))
 					cacheItems[i].state = externalLock
 					break
 				}
-				if err := setValue2(cacheItems[i].val, pl); err == nil {
+				if err := setValue(cacheItems[i].val, pl, cacheItems[i].key); err == nil {
 					cacheItems[i].state = done
 				} else {
 					c.onError(ctx, errors.Wrapf(err, "nds:loadCache2 setValue"))
@@ -468,13 +467,13 @@ func (c *Client) lockCache2(ctx context.Context, cacheItems []cacheItem) {
 						cacheItems[i].state = done
 						cacheItems[i].err = datastore.ErrNoSuchEntity
 					case entityItem:
-						pl := datastore2.PropertyList{}
-						if err := unmarshal2(item.Value, &pl); err != nil {
+						pl := datastore.PropertyList{}
+						if err := unmarshal(item.Value, &pl); err != nil {
 							c.onError(ctx, errors.Wrap(err, "nds:lockCache2 unmarshal"))
 							cacheItems[i].state = externalLock
 							break
 						}
-						if err := setValue2(cacheItems[i].val, pl); err == nil {
+						if err := setValue(cacheItems[i].val, pl, cacheItems[i].key); err == nil {
 							cacheItems[i].state = done
 						} else {
 							c.onError(ctx, errors.Wrap(err, "nds:lockCache2 setValue"))
