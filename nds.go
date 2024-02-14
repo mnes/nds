@@ -44,6 +44,7 @@ var (
 // paths by substituting them with error producing ones.
 var (
 	marshal    = marshalPropertyList
+	marshal2   = marshalPropertyList2
 	unmarshal  = unmarshalPropertyList
 	unmarshal2 = unmarshalPropertyList2
 )
@@ -166,7 +167,19 @@ func createCacheKey2(c context.Context, k *datastore.Key) string {
 	return cacheKey
 }
 
+func appengineKey(c context.Context, k *datastore.Key) *datastore2.Key {
+	return datastore2.NewKey(c, k.Kind, k.Name, 0, nil)
+}
+
 func marshalPropertyList(pl datastore.PropertyList) ([]byte, error) {
+	buf := bytes.Buffer{}
+	if err := gob.NewEncoder(&buf).Encode(&pl); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func marshalPropertyList2(pl datastore2.PropertyList) ([]byte, error) {
 	buf := bytes.Buffer{}
 	if err := gob.NewEncoder(&buf).Encode(&pl); err != nil {
 		return nil, err
