@@ -25,6 +25,8 @@ const (
 	// TODO: Is this still accurate?
 	cacheLockTime = 32 * time.Second
 
+	cacheTtl = 30 * 60 * time.Second //30 minutes
+
 	// cacheMaxKeySize is the maximum size an item key will be. Keys
 	// greater than this size are automatically hashed to a smaller size.
 	cacheMaxKeySize = 250

@@ -538,7 +538,7 @@ func (c *Client) loadDatastore(ctx context.Context, cacheItems []cacheItem,
 
 			if cacheItems[index].state == internalLock {
 				cacheItems[index].item.Flags = entityItem
-				cacheItems[index].item.Expiration = 0
+				cacheItems[index].item.Expiration = cacheTtl
 				if data, err := marshal(pl); err == nil {
 					cacheItems[index].item.Value = data
 				} else {
@@ -553,7 +553,7 @@ func (c *Client) loadDatastore(ctx context.Context, cacheItems []cacheItem,
 		case datastore.ErrNoSuchEntity:
 			if cacheItems[index].state == internalLock {
 				cacheItems[index].item.Flags = noneItem
-				cacheItems[index].item.Expiration = 0
+				cacheItems[index].item.Expiration = cacheTtl
 				cacheItems[index].item.Value = []byte{}
 			}
 			cacheItems[index].err = datastore.ErrNoSuchEntity
@@ -571,7 +571,7 @@ func (c *Client) loadDatastore(ctx context.Context, cacheItems []cacheItem,
 
 			if cacheItems2[index].state == internalLock {
 				cacheItems2[index].item.Flags = entityItem
-				cacheItems2[index].item.Expiration = 0
+				cacheItems2[index].item.Expiration = cacheTtl
 				if data, err := marshal(pl); err == nil {
 					cacheItems2[index].item.Value = data
 				} else {
@@ -586,7 +586,7 @@ func (c *Client) loadDatastore(ctx context.Context, cacheItems []cacheItem,
 		case datastore.ErrNoSuchEntity:
 			if cacheItems2[index].state == internalLock {
 				cacheItems2[index].item.Flags = noneItem
-				cacheItems2[index].item.Expiration = 0
+				cacheItems2[index].item.Expiration = cacheTtl
 				cacheItems2[index].item.Value = []byte{}
 			}
 			cacheItems2[index].err = datastore.ErrNoSuchEntity
