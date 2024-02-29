@@ -212,6 +212,7 @@ func (b *backend) CompareAndSwapMulti(ctx context.Context, items []*nds.Item) (e
 				buf.Grow(4 + len(item.Value))
 				_ = binary.Write(buf, binary.LittleEndian, item.Flags) // Always returns nil since we're using bytes.Buffer
 				_, _ = buf.Write(item.Value)
+				item.Expiration = 30 * 60 * time.Second //30 minutes
 				expire := int64(item.Expiration.Truncate(time.Millisecond) / time.Millisecond)
 				if item.Expiration == 0 {
 					expire = -1
