@@ -195,14 +195,11 @@ func (c *Client) getMulti(ctx context.Context,
 		c.saveCache(ctx, cacheItems)
 		c.saveCache2(ctx, cacheItems2)
 
-		me2, errsNil2, errorNoSuchEntity2 := make(datastore.MultiError, len(cacheItems2)), true, false
+		me2, errsNil2 := make(datastore.MultiError, len(cacheItems2)), true
 		for i, cacheItem := range cacheItems2 {
 			if cacheItem.err != nil {
 				me2[i] = cacheItem.err
 				errsNil2 = false
-				if cacheItem.err == datastore.ErrNoSuchEntity {
-					errorNoSuchEntity2 = true
-				}
 			}
 		}
 
@@ -210,14 +207,11 @@ func (c *Client) getMulti(ctx context.Context,
 			c.onError(ctx, errors.Wrapf(me2, "nds:cache2 me2 GetMulti"))
 		}
 
-		me, errsNil, errorNoSuchEntity := make(datastore.MultiError, len(cacheItems)), true, false
+		me, errsNil := make(datastore.MultiError, len(cacheItems)), true
 		for i, cacheItem := range cacheItems {
 			if cacheItem.err != nil {
 				me[i] = cacheItem.err
 				errsNil = false
-				if cacheItem.err == datastore.ErrNoSuchEntity {
-					errorNoSuchEntity = true
-				}
 			}
 		}
 
@@ -226,9 +220,6 @@ func (c *Client) getMulti(ctx context.Context,
 			return me
 		}
 
-		if errorNoSuchEntity2 || errorNoSuchEntity {
-			return datastore.MultiError{datastore.ErrNoSuchEntity}
-		}
 		return nil
 	}
 	return c.Client.GetMulti(ctx, keys, vals.Interface())
