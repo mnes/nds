@@ -133,6 +133,9 @@ func (c *Client) putMulti(ctx context.Context,
 		lockCacheKeys, lockCacheItems := getCacheLocks(keys)
 
 		defer func() {
+			var span *trace.Span
+			ctx, span = trace.StartSpan(ctx, "nds.putMulti().DeleteMulti(cacher1)")
+			defer span.End()
 			// Remove the locks.
 			if err := c.cacher.DeleteMulti(ctx,
 				lockCacheKeys); err != nil {
@@ -140,23 +143,33 @@ func (c *Client) putMulti(ctx context.Context,
 			}
 		}()
 
+		var span *trace.Span
+		ctx1, span := trace.StartSpan(ctx, "nds.putMulti().cacher.SetMulti")
 		err := c.cacher.SetMulti(ctx, lockCacheItems)
 		if err != nil {
-			c.onError(ctx, errors.Wrap(err, "putMulti:cacher cacher.SetMulti"))
+			c.onError(ctx1, errors.Wrap(err, "putMulti:cacher cacher.SetMulti"))
 		}
+		span.End()
 		if c.cacher2 != nil {
 			lockCacheKeys2, lockCacheItems2 := getCacheLocks2(ctx, keys)
 			defer func() {
+				var span *trace.Span
+				ctx2, span := trace.StartSpan(ctx, "nds.putMulti().DeleteMulti(cacher2)")
+				defer span.End()
 				// Remove the locks.
-				if err := c.cacher2.DeleteMulti(ctx,
+				if err := c.cacher2.DeleteMulti(ctx2,
 					lockCacheKeys2); err != nil {
-					c.onError(ctx, errors.Wrap(err, "putMulti:cacher2 cache2.DeleteMulti"))
+					c.onError(ctx2, errors.Wrap(err, "putMulti:cacher2 cache2.DeleteMulti"))
 				}
 			}()
-			if err := c.cacher2.SetMulti(ctx,
+			var span *trace.Span
+			ctx3, span := trace.StartSpan(ctx, "nds.putMulti().cacher2.SetMulti")
+			if err := c.cacher2.SetMulti(ctx3,
 				lockCacheItems2); err != nil {
+				span.End()
 				return nil, err
 			}
+			span.End()
 		}
 		if err != nil {
 			return nil, err

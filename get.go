@@ -227,6 +227,9 @@ func (c *Client) getMulti(ctx context.Context,
 
 // loadCache will return the # of cache hits
 func (c *Client) loadCache(ctx context.Context, cacheItems []cacheItem) {
+	var span *trace.Span
+	ctx, span = trace.StartSpan(ctx, "nds.GetMulti.loadCache(cache1)")
+	defer span.End()
 
 	cacheKeys := make([]string, len(cacheItems))
 	for i, cacheItem := range cacheItems {
@@ -273,6 +276,9 @@ func (c *Client) loadCache(ctx context.Context, cacheItems []cacheItem) {
 
 // loadCache will return the # of cache hits
 func (c *Client) loadCache2(ctx context.Context, cacheItems []cacheItem) {
+	var span *trace.Span
+	ctx, span = trace.StartSpan(ctx, "nds.GetMulti.loadCache2(cache2)")
+	defer span.End()
 
 	cacheKeys := make([]string, len(cacheItems))
 	for i, cacheItem := range cacheItems {
@@ -334,6 +340,9 @@ func init() {
 }
 
 func (c *Client) lockCache(ctx context.Context, cacheItems []cacheItem) {
+	var span *trace.Span
+	ctx, span = trace.StartSpan(ctx, "nds.GetMulti.lockCache(cache1)")
+	defer span.End()
 
 	lockItems := make([]*Item, 0, len(cacheItems))
 	lockCacheKeys := make([]string, 0, len(cacheItems))
@@ -416,6 +425,9 @@ func (c *Client) lockCache(ctx context.Context, cacheItems []cacheItem) {
 }
 
 func (c *Client) lockCache2(ctx context.Context, cacheItems []cacheItem) {
+	var span *trace.Span
+	ctx, span = trace.StartSpan(ctx, "nds.GetMulti.lockCache2(cache2)")
+	defer span.End()
 
 	lockItems := make([]*Item, 0, len(cacheItems))
 	lockCacheKeys := make([]string, 0, len(cacheItems))
@@ -499,6 +511,9 @@ func (c *Client) lockCache2(ctx context.Context, cacheItems []cacheItem) {
 
 func (c *Client) loadDatastore(ctx context.Context, cacheItems []cacheItem,
 	valsType reflect.Type, cacheItems2 []cacheItem) error {
+	var span *trace.Span
+	ctx, span = trace.StartSpan(ctx, "nds.GetMulti.loadDatastore(cache1,cache2)")
+	defer span.End()
 
 	keys := make([]*datastore.Key, 0, len(cacheItems2))
 	vals := make([]datastore.PropertyList, 0, len(cacheItems2))
@@ -601,6 +616,10 @@ func (c *Client) loadDatastore(ctx context.Context, cacheItems []cacheItem,
 }
 
 func (c *Client) saveCache(ctx context.Context, cacheItems []cacheItem) {
+	var span *trace.Span
+	ctx, span = trace.StartSpan(ctx, "nds.GetMulti.saveCache(cache1)")
+	defer span.End()
+
 	saveItems := make([]*Item, 0, len(cacheItems))
 	for _, cacheItem := range cacheItems {
 		if cacheItem.state == internalLock {
@@ -617,6 +636,10 @@ func (c *Client) saveCache(ctx context.Context, cacheItems []cacheItem) {
 }
 
 func (c *Client) saveCache2(ctx context.Context, cacheItems []cacheItem) {
+	var span *trace.Span
+	ctx, span = trace.StartSpan(ctx, "nds.GetMulti.saveCache2(cache2)")
+	defer span.End()
+
 	saveItems := make([]*Item, 0, len(cacheItems))
 	for _, cacheItem := range cacheItems {
 		if cacheItem.state == internalLock {
