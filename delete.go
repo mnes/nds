@@ -69,7 +69,7 @@ func (c *Client) deleteMulti(ctx context.Context, keys []*datastore.Key) error {
 
 		// Make sure we can lock the cache with no errors before deleting.
 		var span *trace.Span
-		ctx1, span := trace.StartSpan(ctx, "nds.deleteMulti().cacher.SetMulti")
+		ctx1, span := trace.StartSpan(ctx, "nds.deleteMulti().cacher.SetMulti(cacher1)")
 		err := c.cacher.SetMulti(ctx1, lockCacheItems)
 		if err != nil {
 			c.onError(ctx1, errors.Wrap(err, "deleteMulti:cacher cacher.SetMulti"))
@@ -79,7 +79,7 @@ func (c *Client) deleteMulti(ctx context.Context, keys []*datastore.Key) error {
 			_, lockCacheItems2 := getCacheLocks2(ctx, keys)
 
 			var span *trace.Span
-			ctx2, span := trace.StartSpan(ctx, "nds.deleteMulti().cacher2.SetMulti")
+			ctx2, span := trace.StartSpan(ctx, "nds.deleteMulti().cacher2.SetMulti(cacher2)")
 			// Make sure we can lock the cache with no errors before deleting.
 			if err := c.cacher2.SetMulti(ctx2,
 				lockCacheItems2); err != nil {
