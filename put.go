@@ -145,7 +145,7 @@ func (c *Client) putMulti(ctx context.Context,
 
 		var span *trace.Span
 		ctx1, span := trace.StartSpan(ctx, "nds.putMulti().cacher.SetMulti")
-		err := c.cacher.SetMulti(ctx, lockCacheItems)
+		err := c.cacher.SetMulti(ctx1, lockCacheItems)
 		if err != nil {
 			c.onError(ctx1, errors.Wrap(err, "putMulti:cacher cacher.SetMulti"))
 		}
