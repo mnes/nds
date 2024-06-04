@@ -2,6 +2,7 @@ package nds
 
 import (
 	"context"
+	"time"
 
 	"github.com/mnes/logger/log"
 
@@ -12,8 +13,8 @@ type OnErrorFunc func(ctx context.Context, err error)
 
 type Client struct {
 	cacher    Cacher
-	cacher2   Cacher
 	onErrorFn OnErrorFunc
+	cacheTtl  time.Duration
 
 	// TODO: Client is exported since we embedded datastore.Client - fix this
 	*datastore.Client
@@ -43,10 +44,10 @@ func WithOnErrorFunc(f OnErrorFunc) ClientOption {
 
 // NewClient will return an nds.Client that can be used exactly like a datastore.Client but will
 // transparently use the cache configuration provided to cache requests when it can.
-func NewClient(ctx context.Context, cacher Cacher, cacher2 Cacher, opts ...ClientOption) (*Client, error) {
+func NewClient(ctx context.Context, cacher Cacher, cacheTtl time.Duration, opts ...ClientOption) (*Client, error) {
 	client := &Client{
-		cacher:  cacher,
-		cacher2: cacher2,
+		cacher:   cacher,
+		cacheTtl: cacheTtl,
 	}
 
 	for _, opt := range opts {

@@ -42,7 +42,7 @@ const (
 // into the redis script cache and return an error if it is
 // unable to. Anytime the redis script cache is flushed, a new
 // redis nds.Cacher must be initialized to reload the script.
-func NewCacher(ctx context.Context, pool *redis.Pool) (n nds.Cacher, err error) {
+func NewCacher(ctx context.Context, pool *redis.Pool, cacheTtl time.Duration) (n nds.Cacher, err error) {
 	conn := pool.GetWithContext(ctx).(redis.ConnWithContext)
 
 	defer func() {
@@ -51,7 +51,7 @@ func NewCacher(ctx context.Context, pool *redis.Pool) (n nds.Cacher, err error) 
 		}
 	}()
 
-	b := backend{store: pool}
+	b := backend{store: pool, cacheTtl: cacheTtl}
 
 	if b.casSha, err = redis.String(conn.DoContext(ctx, "SCRIPT", "LOAD", casScript)); err != nil {
 		return
@@ -63,8 +63,9 @@ func NewCacher(ctx context.Context, pool *redis.Pool) (n nds.Cacher, err error) 
 }
 
 type backend struct {
-	store  *redis.Pool
-	casSha string
+	store    *redis.Pool
+	casSha   string
+	cacheTtl time.Duration
 }
 
 var bufPool = sync.Pool{
@@ -212,7 +213,7 @@ func (b *backend) CompareAndSwapMulti(ctx context.Context, items []*nds.Item) (e
 				buf.Grow(4 + len(item.Value))
 				_ = binary.Write(buf, binary.LittleEndian, item.Flags) // Always returns nil since we're using bytes.Buffer
 				_, _ = buf.Write(item.Value)
-				item.Expiration = 30 * 60 * time.Second //30 minutes
+				item.Expiration = b.cacheTtl
 				expire := int64(item.Expiration.Truncate(time.Millisecond) / time.Millisecond)
 				if item.Expiration == 0 {
 					expire = -1

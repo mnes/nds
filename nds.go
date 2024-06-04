@@ -2,7 +2,6 @@ package nds
 
 import (
 	"bytes"
-	"context"
 	"crypto/sha1"
 	"encoding/gob"
 	"encoding/hex"
@@ -11,7 +10,6 @@ import (
 	"time"
 
 	"cloud.google.com/go/datastore"
-	datastore2 "google.golang.org/appengine/v2/datastore"
 )
 
 const (
@@ -38,16 +36,13 @@ var (
 	typeOfPropertyList = reflect.TypeOf(datastore.PropertyList(nil))
 	typeOfKeyLoader    = reflect.TypeOf(
 		(*datastore.KeyLoader)(nil)).Elem()
-	typeOfPropertyLoadSaver2 = reflect.TypeOf(
-		(*datastore2.PropertyLoadSaver)(nil)).Elem()
 )
 
 // The variables in this block are here so that we can test all error code
 // paths by substituting them with error producing ones.
 var (
-	marshal    = marshalPropertyList
-	unmarshal  = unmarshalPropertyList
-	unmarshal2 = unmarshalPropertyList2
+	marshal   = marshalPropertyList
+	unmarshal = unmarshalPropertyList
 )
 
 const (
@@ -82,26 +77,6 @@ func checkValueType(valType reflect.Type) valueType {
 	}
 
 	if reflect.PtrTo(valType).Implements(typeOfPropertyLoadSaver) {
-		return valueTypePropertyLoadSaver
-	}
-
-	switch valType.Kind() {
-	case reflect.Struct:
-		return valueTypeStruct
-	case reflect.Interface:
-		return valueTypeInterface
-	case reflect.Ptr:
-		valType = valType.Elem()
-		if valType.Kind() == reflect.Struct {
-			return valueTypeStructPtr
-		}
-	}
-	return valueTypeInvalid
-}
-
-func checkValueType2(valType reflect.Type) valueType {
-
-	if reflect.PtrTo(valType).Implements(typeOfPropertyLoadSaver2) {
 		return valueTypePropertyLoadSaver
 	}
 
@@ -158,16 +133,6 @@ func createCacheKey(key *datastore.Key) string {
 	return cacheKey
 }
 
-func createCacheKey2(c context.Context, k *datastore.Key) string {
-	key := datastore2.NewKey(c, k.Kind, k.Name, 0, nil)
-	cacheKey := cachePrefix + key.Encode()
-	if len(cacheKey) > cacheMaxKeySize {
-		hash := sha1.Sum([]byte(cacheKey))
-		cacheKey = hex.EncodeToString(hash[:])
-	}
-	return cacheKey
-}
-
 func marshalPropertyList(pl datastore.PropertyList) ([]byte, error) {
 	buf := bytes.Buffer{}
 	if err := gob.NewEncoder(&buf).Encode(&pl); err != nil {
@@ -177,10 +142,6 @@ func marshalPropertyList(pl datastore.PropertyList) ([]byte, error) {
 }
 
 func unmarshalPropertyList(data []byte, pl *datastore.PropertyList) error {
-	return gob.NewDecoder(bytes.NewBuffer(data)).Decode(pl)
-}
-
-func unmarshalPropertyList2(data []byte, pl *datastore2.PropertyList) error {
 	return gob.NewDecoder(bytes.NewBuffer(data)).Decode(pl)
 }
 
@@ -208,25 +169,6 @@ func setValue(val reflect.Value, pl datastore.PropertyList, key *datastore.Key) 
 	}
 
 	return datastore.LoadStruct(val.Interface(), pl)
-}
-
-func setValue2(val reflect.Value, pl datastore2.PropertyList) error {
-
-	valType := checkValueType2(val.Type())
-
-	if valType == valueTypePropertyLoadSaver || valType == valueTypeStruct {
-		val = val.Addr()
-	}
-
-	if valType == valueTypeStructPtr && val.IsNil() {
-		val.Set(reflect.New(val.Type().Elem()))
-	}
-
-	if pls, ok := val.Interface().(datastore2.PropertyLoadSaver); ok {
-		return pls.Load(pl)
-	}
-
-	return datastore2.LoadStruct(val.Interface(), pl)
 }
 
 func isErrorsNil(errs []error) bool {
@@ -268,31 +210,6 @@ func getCacheLocks(keys []*datastore.Key) ([]string, []*Item) {
 		// datastore.Delete will raise the appropriate error.
 		if key != nil && !key.Incomplete() {
 			cacheKey := createCacheKey(key)
-			if _, found := set[cacheKey]; !found {
-				item := &Item{
-					Key:        cacheKey,
-					Flags:      lockItem,
-					Value:      itemLock(),
-					Expiration: cacheLockTime,
-				}
-				lockCacheItems = append(lockCacheItems, item)
-				lockCacheKeys = append(lockCacheKeys, item.Key)
-				set[cacheKey] = nil
-			}
-		}
-	}
-	return lockCacheKeys, lockCacheItems
-}
-
-func getCacheLocks2(ctx context.Context, keys []*datastore.Key) ([]string, []*Item) {
-	lockCacheKeys := make([]string, 0, len(keys))
-	lockCacheItems := make([]*Item, 0, len(keys))
-	set := make(map[string]interface{})
-	for _, key := range keys {
-		// Worst case scenario is that we lock the entity for cacheLockTime.
-		// datastore.Delete will raise the appropriate error.
-		if key != nil && !key.Incomplete() {
-			cacheKey := createCacheKey2(ctx, key)
 			if _, found := set[cacheKey]; !found {
 				item := &Item{
 					Key:        cacheKey,

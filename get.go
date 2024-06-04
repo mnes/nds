@@ -12,7 +12,6 @@ import (
 	"cloud.google.com/go/datastore"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
-	datastore2 "google.golang.org/appengine/v2/datastore"
 )
 
 // getMultiLimit is the Google Cloud Datastore limit for the maximum number
@@ -161,7 +160,7 @@ type cacheItem struct {
 func (c *Client) getMulti(ctx context.Context,
 	keys []*datastore.Key, vals reflect.Value) error {
 
-	if c.cacher != nil && c.cacher2 != nil {
+	if c.cacher != nil {
 		num := len(keys)
 		cacheItems := make([]cacheItem, num)
 		for i, key := range keys {
@@ -170,42 +169,19 @@ func (c *Client) getMulti(ctx context.Context,
 			cacheItems[i].val = vals.Index(i)
 			cacheItems[i].state = miss
 		}
-		cacheItems2 := make([]cacheItem, num)
-		for i, key := range keys {
-			cacheItems2[i].key = key
-			cacheItems2[i].cacheKey = createCacheKey2(ctx, key)
-			cacheItems2[i].val = vals.Index(i)
-			cacheItems2[i].state = miss
-		}
 
-		c.loadCache(ctx, cacheItems) // redis 8/10
+		c.loadCache(ctx, cacheItems)
 		if err := cacheStatsByKind(ctx, cacheItems); err != nil {
 			c.onError(ctx, errors.Wrapf(err, "nds:getMulti cacheStatsByKind"))
 		}
-		c.loadCache2(ctx, cacheItems2) //memcache 7/10
 
-		c.lockCache(ctx, cacheItems)   // redis 2 miss
-		c.lockCache2(ctx, cacheItems2) // memcache 3 miss
+		c.lockCache(ctx, cacheItems)
 
-		err := c.loadDatastore(ctx, cacheItems, vals.Type(), cacheItems2)
-		if err != nil {
+		if err := c.loadDatastore(ctx, cacheItems, vals.Type()); err != nil {
 			return err
 		}
 
 		c.saveCache(ctx, cacheItems)
-		c.saveCache2(ctx, cacheItems2)
-
-		me2, errsNil2 := make(datastore.MultiError, len(cacheItems2)), true
-		for i, cacheItem := range cacheItems2 {
-			if cacheItem.err != nil {
-				me2[i] = cacheItem.err
-				errsNil2 = false
-			}
-		}
-
-		if !errsNil2 {
-			c.onError(ctx, errors.Wrapf(me2, "nds:cache2 me2 GetMulti"))
-		}
 
 		me, errsNil := make(datastore.MultiError, len(cacheItems)), true
 		for i, cacheItem := range cacheItems {
@@ -215,12 +191,10 @@ func (c *Client) getMulti(ctx context.Context,
 			}
 		}
 
-		if !errsNil {
-			c.onError(ctx, errors.Wrapf(me, "nds:cache me GetMulti"))
-			return me
+		if errsNil {
+			return nil
 		}
-
-		return nil
+		return me
 	}
 	return c.Client.GetMulti(ctx, keys, vals.Interface())
 }
@@ -268,55 +242,6 @@ func (c *Client) loadCache(ctx context.Context, cacheItems []cacheItem) {
 				}
 			default:
 				c.onError(ctx, errors.Errorf("nds:loadCache unknown item.Flags %d", item.Flags))
-				cacheItems[i].state = externalLock
-			}
-		}
-	}
-}
-
-// loadCache will return the # of cache hits
-func (c *Client) loadCache2(ctx context.Context, cacheItems []cacheItem) {
-	var span *trace.Span
-	ctx, span = trace.StartSpan(ctx, "nds.GetMulti.loadCache2(cache2)")
-	defer span.End()
-
-	cacheKeys := make([]string, len(cacheItems))
-	for i, cacheItem := range cacheItems {
-		cacheKeys[i] = cacheItem.cacheKey
-	}
-
-	items, err := c.cacher2.GetMulti(ctx, cacheKeys)
-	if err != nil {
-		for i := range cacheItems {
-			cacheItems[i].state = externalLock
-		}
-		c.onError(ctx, errors.Wrapf(err, "nds:loadCache2 GetMulti"))
-		return
-	}
-
-	for i, cacheKey := range cacheKeys {
-		if item, ok := items[cacheKey]; ok {
-			switch item.Flags {
-			case lockItem:
-				cacheItems[i].state = externalLock
-			case noneItem:
-				cacheItems[i].state = done
-				cacheItems[i].err = datastore.ErrNoSuchEntity
-			case entityItem:
-				pl := datastore2.PropertyList{}
-				if err := unmarshal2(item.Value, &pl); err != nil {
-					c.onError(ctx, errors.Wrapf(err, "nds:loadCache2 unmarshal"))
-					cacheItems[i].state = externalLock
-					break
-				}
-				if err := setValue2(cacheItems[i].val, pl); err == nil {
-					cacheItems[i].state = done
-				} else {
-					c.onError(ctx, errors.Wrapf(err, "nds:loadCache2 setValue"))
-					cacheItems[i].state = externalLock
-				}
-			default:
-				c.onError(ctx, errors.Errorf("nds:loadCache2 unknown item.Flags %d", item.Flags))
 				cacheItems[i].state = externalLock
 			}
 		}
@@ -424,102 +349,17 @@ func (c *Client) lockCache(ctx context.Context, cacheItems []cacheItem) {
 	}
 }
 
-func (c *Client) lockCache2(ctx context.Context, cacheItems []cacheItem) {
-	var span *trace.Span
-	ctx, span = trace.StartSpan(ctx, "nds.GetMulti.lockCache2(cache2)")
-	defer span.End()
-
-	lockItems := make([]*Item, 0, len(cacheItems))
-	lockCacheKeys := make([]string, 0, len(cacheItems))
-	for i, cacheItem := range cacheItems {
-		if cacheItem.state == miss {
-
-			item := &Item{
-				Key:        cacheItem.cacheKey,
-				Flags:      lockItem,
-				Value:      itemLock(),
-				Expiration: cacheLockTime,
-			}
-			cacheItems[i].item = item
-			lockItems = append(lockItems, item)
-			lockCacheKeys = append(lockCacheKeys, cacheItem.cacheKey)
-		}
-	}
-
-	if len(lockItems) > 0 {
-		// We don't care if there are errors here.
-		if err := c.cacher2.AddMulti(ctx, lockItems); err != nil {
-			c.onError(ctx, errors.Wrap(err, "nds:lockCache2 AddMulti"))
-		}
-
-		// Get the items again so we can use CAS when updating the cache.
-		items, err := c.cacher2.GetMulti(ctx, lockCacheKeys)
-
-		// Cache failed so forget about it and just use the datastore.
-		if err != nil {
-			for i, cacheItem := range cacheItems {
-				if cacheItem.state == miss {
-					cacheItems[i].state = externalLock
-				}
-			}
-			c.onError(ctx, errors.Wrap(err, "nds:lockCache2 GetMulti"))
-			return
-		}
-
-		// Cache worked so figure out what items we got.
-		for i, cacheItem := range cacheItems {
-			if cacheItem.state == miss {
-				if item, ok := items[cacheItem.cacheKey]; ok {
-					switch item.Flags {
-					case lockItem:
-						if bytes.Equal(item.Value, cacheItem.item.Value) {
-							cacheItems[i].item = item
-							cacheItems[i].state = internalLock
-						} else {
-							cacheItems[i].state = externalLock
-						}
-					case noneItem:
-						cacheItems[i].state = done
-						cacheItems[i].err = datastore.ErrNoSuchEntity
-					case entityItem:
-						pl := datastore2.PropertyList{}
-						if err := unmarshal2(item.Value, &pl); err != nil {
-							c.onError(ctx, errors.Wrap(err, "nds:lockCache2 unmarshal"))
-							cacheItems[i].state = externalLock
-							break
-						}
-						if err := setValue2(cacheItems[i].val, pl); err == nil {
-							cacheItems[i].state = done
-						} else {
-							c.onError(ctx, errors.Wrap(err, "nds:lockCache2 setValue"))
-							cacheItems[i].state = externalLock
-						}
-					default:
-						c.onError(ctx, errors.Errorf("nds:lockCache2 unknown item.Flags %d",
-							item.Flags))
-						cacheItems[i].state = externalLock
-					}
-				} else {
-					// We just added a cache item but it now isn't available so
-					// treat it as an extarnal lock.
-					cacheItems[i].state = externalLock
-				}
-			}
-		}
-	}
-}
-
 func (c *Client) loadDatastore(ctx context.Context, cacheItems []cacheItem,
-	valsType reflect.Type, cacheItems2 []cacheItem) error {
+	valsType reflect.Type) error {
 	var span *trace.Span
 	ctx, span = trace.StartSpan(ctx, "nds.GetMulti.loadDatastore(cache1,cache2)")
 	defer span.End()
 
-	keys := make([]*datastore.Key, 0, len(cacheItems2))
-	vals := make([]datastore.PropertyList, 0, len(cacheItems2))
-	cacheItemsIndex := make([]int, 0, len(cacheItems2))
+	keys := make([]*datastore.Key, 0, len(cacheItems))
+	vals := make([]datastore.PropertyList, 0, len(cacheItems))
+	cacheItemsIndex := make([]int, 0, len(cacheItems))
 
-	for i, cacheItem := range cacheItems2 {
+	for i, cacheItem := range cacheItems {
 		switch cacheItem.state {
 		case internalLock, externalLock:
 			keys = append(keys, cacheItem.key)
@@ -555,7 +395,7 @@ func (c *Client) loadDatastore(ctx context.Context, cacheItems []cacheItem,
 
 			if cacheItems[index].state == internalLock {
 				cacheItems[index].item.Flags = entityItem
-				cacheItems[index].item.Expiration = cacheTtl
+				cacheItems[index].item.Expiration = c.cacheTtl
 				if data, err := marshal(pl); err == nil {
 					cacheItems[index].item.Value = data
 				} else {
@@ -570,46 +410,13 @@ func (c *Client) loadDatastore(ctx context.Context, cacheItems []cacheItem,
 		case datastore.ErrNoSuchEntity:
 			if cacheItems[index].state == internalLock {
 				cacheItems[index].item.Flags = noneItem
-				cacheItems[index].item.Expiration = cacheTtl
+				cacheItems[index].item.Expiration = c.cacheTtl
 				cacheItems[index].item.Value = []byte{}
 			}
 			cacheItems[index].err = datastore.ErrNoSuchEntity
 		default:
 			cacheItems[index].state = externalLock
 			cacheItems[index].err = me[i]
-		}
-	}
-
-	for i, index := range cacheItemsIndex {
-		switch me[i] {
-		case nil:
-			pl := vals[i]
-			val := cacheItems2[index].val
-
-			if cacheItems2[index].state == internalLock {
-				cacheItems2[index].item.Flags = entityItem
-				cacheItems2[index].item.Expiration = cacheTtl
-				if data, err := marshal(pl); err == nil {
-					cacheItems2[index].item.Value = data
-				} else {
-					cacheItems2[index].state = externalLock
-					c.onError(ctx, errors.Wrap(err, "nds:loadDatastore marshal:cacheItems2"))
-				}
-			}
-
-			if err := setValue(val, pl, cacheItems2[index].key); err != nil {
-				cacheItems2[index].err = err
-			}
-		case datastore.ErrNoSuchEntity:
-			if cacheItems2[index].state == internalLock {
-				cacheItems2[index].item.Flags = noneItem
-				cacheItems2[index].item.Expiration = cacheTtl
-				cacheItems2[index].item.Value = []byte{}
-			}
-			cacheItems2[index].err = datastore.ErrNoSuchEntity
-		default:
-			cacheItems2[index].state = externalLock
-			cacheItems2[index].err = me[i]
 		}
 	}
 	return nil
@@ -632,27 +439,5 @@ func (c *Client) saveCache(ctx context.Context, cacheItems []cacheItem) {
 	}
 	if err := c.cacher.CompareAndSwapMulti(ctx, saveItems); err != nil {
 		c.onError(ctx, errors.Wrap(err, "nds:saveCache cacher CompareAndSwapMulti"))
-	}
-}
-
-func (c *Client) saveCache2(ctx context.Context, cacheItems []cacheItem) {
-	var span *trace.Span
-	ctx, span = trace.StartSpan(ctx, "nds.GetMulti.saveCache2(cache2)")
-	defer span.End()
-
-	saveItems := make([]*Item, 0, len(cacheItems))
-	for _, cacheItem := range cacheItems {
-		if cacheItem.state == internalLock {
-			saveItems = append(saveItems, cacheItem.item)
-		}
-	}
-
-	if len(saveItems) == 0 {
-		return
-	}
-	if c.cacher2 != nil {
-		if err := c.cacher2.CompareAndSwapMulti(ctx, saveItems); err != nil {
-			c.onError(ctx, errors.Wrap(err, "nds:saveCache2 cacher2 CompareAndSwapMulti"))
-		}
 	}
 }
