@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mnes/logger/log"
 	"github.com/opencensus-integrations/redigo/redis"
 
 	"github.com/qedus/nds/v2"
@@ -41,7 +42,7 @@ const (
 // into the redis script cache and return an error if it is
 // unable to. Anytime the redis script cache is flushed, a new
 // redis nds.Cacher must be initialized to reload the script.
-func NewCacher(ctx context.Context, pool *redis.Pool) (n nds.Cacher, err error) {
+func NewCacher(ctx context.Context, pool *redis.Pool, cacheTtl time.Duration) (n nds.Cacher, err error) {
 	conn := pool.GetWithContext(ctx).(redis.ConnWithContext)
 
 	defer func() {
@@ -50,7 +51,7 @@ func NewCacher(ctx context.Context, pool *redis.Pool) (n nds.Cacher, err error) 
 		}
 	}()
 
-	b := backend{store: pool}
+	b := backend{store: pool, cacheTtl: cacheTtl}
 
 	if b.casSha, err = redis.String(conn.DoContext(ctx, "SCRIPT", "LOAD", casScript)); err != nil {
 		return
@@ -62,8 +63,9 @@ func NewCacher(ctx context.Context, pool *redis.Pool) (n nds.Cacher, err error) 
 }
 
 type backend struct {
-	store  *redis.Pool
-	casSha string
+	store    *redis.Pool
+	casSha   string
+	cacheTtl time.Duration
 }
 
 var bufPool = sync.Pool{
@@ -180,6 +182,7 @@ func (b *backend) CompareAndSwapMulti(ctx context.Context, items []*nds.Item) (e
 	redisConn := b.store.GetWithContext(ctx).(redis.ConnWithContext)
 	defer func() {
 		if cerr := redisConn.CloseContext(ctx); cerr != nil && err == nil {
+			log.Warningf(ctx, "nds redis err:%v", err)
 			err = cerr
 		}
 	}()
@@ -210,6 +213,7 @@ func (b *backend) CompareAndSwapMulti(ctx context.Context, items []*nds.Item) (e
 				buf.Grow(4 + len(item.Value))
 				_ = binary.Write(buf, binary.LittleEndian, item.Flags) // Always returns nil since we're using bytes.Buffer
 				_, _ = buf.Write(item.Value)
+				item.Expiration = b.cacheTtl
 				expire := int64(item.Expiration.Truncate(time.Millisecond) / time.Millisecond)
 				if item.Expiration == 0 {
 					expire = -1
@@ -304,7 +308,8 @@ func (b *backend) DeleteMulti(ctx context.Context, keys []string) (err error) {
 		err = nerr
 		return err
 	} else if num != int64(len(keys)) {
-		err = fmt.Errorf("redis: expected to remove %d keys, but only removed %d", len(keys), num)
+		log.Warningf(ctx, "nds err:redis: expected to remove %d keys, but only removed %d", len(keys), num)
+		err = nds.ErrCacheMiss
 		return
 	}
 

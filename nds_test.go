@@ -120,7 +120,7 @@ func initRedis() {
 		panic(err)
 	}
 
-	cacher, err := credis.NewCacher(context.Background(), redisPool)
+	cacher, err := credis.NewCacher(context.Background(), redisPool, time.Second)
 	if err != nil {
 		panic(err)
 	}
@@ -164,7 +164,7 @@ func NewClient(ctx context.Context, cacher nds.Cacher, t *testing.T, logOKTest f
 			t.Errorf("%+v", err)
 		}
 	}
-	return nds.NewClient(ctx, cacher, nds.WithOnErrorFunc(onErrorFn))
+	return nds.NewClient(ctx, cacher, time.Second, nds.WithOnErrorFunc(onErrorFn))
 }
 
 func TestCachers(t *testing.T) {
@@ -824,7 +824,7 @@ func TestCreateCacheKey(t *testing.T) {
 
 func TestNilCacher(t *testing.T) {
 	ctx := context.Background()
-	client, err := nds.NewClient(ctx, nil)
+	client, err := nds.NewClient(ctx, nil, time.Second)
 
 	if err != nil {
 		t.Fatalf("could not get client due to error: %v", err)
