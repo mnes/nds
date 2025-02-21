@@ -74,6 +74,36 @@ var bufPool = sync.Pool{
 	},
 }
 
+// Define a logging connection wrapper
+type LoggingConn struct {
+	redis.ConnWithContext
+	CreatedAt time.Time
+}
+
+func (lc LoggingConn) DoContext(ctx context.Context, commandName string, args ...interface{}) (reply interface{}, err error) {
+
+	calculateLifeTime(ctx, &lc, commandName)
+	// Call the original method
+	return lc.ConnWithContext.DoContext(ctx, commandName, args...)
+}
+
+func (lc LoggingConn) CloseContext(ctx context.Context) error {
+	calculateLifeTime(ctx, &lc, "CloseContext")
+	// Call the original method
+	return lc.ConnWithContext.CloseContext(ctx)
+}
+
+// Log the command and connection age
+func calculateLifeTime(ctx context.Context, lc *LoggingConn, operation string) {
+	elapsedTime := time.Since(lc.CreatedAt)
+	log.Infof(ctx, "Operation: %s, Connection createdAt: %s, Existence Time: %v", operation, lc.CreatedAt.Format("2006-01-02 15:04:05.000000000"), elapsedTime)
+}
+
+func getStats(ctx context.Context, stats redis.PoolStats) {
+	// Log current connection pool stats (idle and active connections)
+	log.Infof(ctx, "Active connections: %d, Idle connections: %d", stats.ActiveCount, stats.IdleCount)
+}
+
 func (b *backend) AddMulti(ctx context.Context, items []*nds.Item) (err error) {
 	redisConn := b.store.GetWithContext(ctx).(redis.ConnWithContext)
 
@@ -82,6 +112,7 @@ func (b *backend) AddMulti(ctx context.Context, items []*nds.Item) (err error) {
 			err = cerr
 		}
 	}()
+	getStats(ctx, b.store.Stats())
 
 	err = set(ctx, redisConn, true, items)
 
@@ -186,6 +217,7 @@ func (b *backend) CompareAndSwapMulti(ctx context.Context, items []*nds.Item) (e
 			err = cerr
 		}
 	}()
+	getStats(ctx, b.store.Stats())
 
 	me := make(nds.MultiError, len(items))
 	meChan := make(chan error, len(items))
@@ -287,6 +319,7 @@ func (b *backend) DeleteMulti(ctx context.Context, keys []string) (err error) {
 			err = cerr
 		}
 	}()
+	getStats(ctx, b.store.Stats())
 
 	if len(keys) == 0 {
 		return
@@ -326,6 +359,7 @@ func (b *backend) GetMulti(ctx context.Context, keys []string) (result map[strin
 			err = cerr
 		}
 	}()
+	getStats(ctx, b.store.Stats())
 
 	args := make([]interface{}, len(keys))
 	for i, key := range keys {
@@ -391,6 +425,7 @@ func (b *backend) SetMulti(ctx context.Context, items []*nds.Item) (err error) {
 			err = cerr
 		}
 	}()
+	getStats(ctx, b.store.Stats())
 
 	err = set(ctx, redisConn, false, items)
 
