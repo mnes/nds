@@ -77,12 +77,14 @@ var bufPool = sync.Pool{
 // Define a logging connection wrapper
 type LoggingConn struct {
 	redis.ConnWithContext
+	Id        string
+	LastUsed  time.Time
 	CreatedAt time.Time
 }
 
-func (lc LoggingConn) DoContext(ctx context.Context, commandName string, args ...interface{}) (reply interface{}, err error) {
-
-	calculateLifeTime(ctx, &lc, commandName)
+func (lc *LoggingConn) DoContext(ctx context.Context, commandName string, args ...interface{}) (reply interface{}, err error) {
+	lc.LastUsed = time.Now()
+	calculateLifeTime(ctx, lc, commandName)
 	// Call the original method
 	return lc.ConnWithContext.DoContext(ctx, commandName, args...)
 }
@@ -93,10 +95,29 @@ func (lc LoggingConn) CloseContext(ctx context.Context) error {
 	return lc.ConnWithContext.CloseContext(ctx)
 }
 
+func (lc *LoggingConn) SendContext(ctx context.Context, commandName string, args ...interface{}) error {
+	lc.LastUsed = time.Now()
+	// Call the original method
+	return lc.ConnWithContext.SendContext(ctx, commandName, args...)
+}
+
+func (lc *LoggingConn) ReceiveContext(ctx context.Context) (reply interface{}, err error) {
+	lc.LastUsed = time.Now()
+	// Call the original method
+	return lc.ConnWithContext.ReceiveContext(ctx)
+}
+
+func (lc *LoggingConn) FlushContext(ctx context.Context) error {
+	lc.LastUsed = time.Now()
+	// Call the original method
+	return lc.ConnWithContext.FlushContext(ctx)
+}
+
 // Log the command and connection age
 func calculateLifeTime(ctx context.Context, lc *LoggingConn, operation string) {
 	elapsedTime := time.Since(lc.CreatedAt)
-	log.Infof(ctx, "Operation: %s, Connection createdAt: %s, Existence Time: %v", operation, lc.CreatedAt.Format("2006-01-02 15:04:05.000000000"), elapsedTime)
+	LastUsedDuration := time.Since(lc.LastUsed)
+	log.Infof(ctx, "Operation: %s, Connection Id: %s, Connection createdAt: %s, Connection LastUsed: %s, LastUsedAfterDuration: %v, Existence Time: %v", operation, lc.Id, lc.CreatedAt.Format("2006-01-02 15:04:05.000000000"), lc.LastUsed.Format("2006-01-02 15:04:05.000000000"), LastUsedDuration, elapsedTime)
 }
 
 func getStats(ctx context.Context, stats redis.PoolStats) {
