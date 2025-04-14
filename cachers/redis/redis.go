@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mnes/logger/log"
 	"github.com/opencensus-integrations/redigo/redis"
 
 	"github.com/qedus/nds/v2"
+	"github.com/qedus/nds/v2/logger/log"
 )
 
 const (

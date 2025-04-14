@@ -4,9 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/mnes/logger/log"
-
 	"cloud.google.com/go/datastore"
+	"github.com/qedus/nds/v2/logger/log"
 )
 
 type OnErrorFunc func(ctx context.Context, err error)

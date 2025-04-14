@@ -9,7 +9,7 @@ package log
 import (
 	"context"
 
-	"github.com/mnes/logger"
+	"github.com/qedus/nds/v2/logger"
 )
 
 // Debugf formats its arguments according to the format, analogous to fmt.Printf,
