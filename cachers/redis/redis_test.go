@@ -35,7 +35,7 @@ func TestRedisCacher(t *testing.T) {
 		},
 	}
 
-	client, err := redis.NewCacher(context.Background(), redisPool)
+	client, err := redis.NewCacher(context.Background(), redisPool, time.Second)
 	if err != nil {
 		t.Fatalf("cannot test redis, error connecting to pool: %v", err)
 	}
@@ -101,7 +101,7 @@ func NewCacherTest() func(t *testing.T) {
 	return func(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				if _, err := redis.NewCacher(tt.in.ctx, tt.in.pool); (err != nil) != tt.expectErr {
+				if _, err := redis.NewCacher(tt.in.ctx, tt.in.pool, time.Second); (err != nil) != tt.expectErr {
 					t.Errorf("expectErr = %v, err = %v", tt.expectErr, err)
 				}
 			})

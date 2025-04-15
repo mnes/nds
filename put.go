@@ -133,15 +133,24 @@ func (c *Client) putMulti(ctx context.Context,
 		lockCacheKeys, lockCacheItems := getCacheLocks(keys)
 
 		defer func() {
+			var span *trace.Span
+			ctx1, span := trace.StartSpan(ctx, "nds.putMulti().DeleteMulti(cacher)")
+			defer span.End()
 			// Remove the locks.
-			if err := c.cacher.DeleteMulti(ctx,
+			if err := c.cacher.DeleteMulti(ctx1,
 				lockCacheKeys); err != nil {
-				c.onError(ctx, errors.Wrap(err, "putMulti cache.DeleteMulti"))
+				c.onError(ctx1, errors.Wrap(err, "putMulti cache.DeleteMulti"))
 			}
 		}()
 
-		if err := c.cacher.SetMulti(ctx,
-			lockCacheItems); err != nil {
+		var span *trace.Span
+		ctx1, span := trace.StartSpan(ctx, "nds.putMulti().cacher.SetMulti(cacher)")
+		err := c.cacher.SetMulti(ctx1, lockCacheItems)
+		if err != nil {
+			c.onError(ctx1, errors.Wrap(err, "putMulti:cacher cacher.SetMulti"))
+		}
+		span.End()
+		if err != nil {
 			return nil, err
 		}
 

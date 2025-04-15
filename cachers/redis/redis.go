@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mnes/logger/log"
 	"github.com/opencensus-integrations/redigo/redis"
 
 	"github.com/qedus/nds/v2"
@@ -41,7 +42,7 @@ const (
 // into the redis script cache and return an error if it is
 // unable to. Anytime the redis script cache is flushed, a new
 // redis nds.Cacher must be initialized to reload the script.
-func NewCacher(ctx context.Context, pool *redis.Pool) (n nds.Cacher, err error) {
+func NewCacher(ctx context.Context, pool *redis.Pool, cacheTtl time.Duration) (n nds.Cacher, err error) {
 	conn := pool.GetWithContext(ctx).(redis.ConnWithContext)
 
 	defer func() {
@@ -50,7 +51,7 @@ func NewCacher(ctx context.Context, pool *redis.Pool) (n nds.Cacher, err error) 
 		}
 	}()
 
-	b := backend{store: pool}
+	b := backend{store: pool, cacheTtl: cacheTtl}
 
 	if b.casSha, err = redis.String(conn.DoContext(ctx, "SCRIPT", "LOAD", casScript)); err != nil {
 		return
@@ -62,14 +63,66 @@ func NewCacher(ctx context.Context, pool *redis.Pool) (n nds.Cacher, err error) 
 }
 
 type backend struct {
-	store  *redis.Pool
-	casSha string
+	store    *redis.Pool
+	casSha   string
+	cacheTtl time.Duration
 }
 
 var bufPool = sync.Pool{
 	New: func() interface{} {
 		return new(bytes.Buffer)
 	},
+}
+
+// Define a logging connection wrapper
+type LoggingConn struct {
+	redis.ConnWithContext
+	Id        string
+	LastUsed  time.Time
+	CreatedAt time.Time
+}
+
+func (lc *LoggingConn) DoContext(ctx context.Context, commandName string, args ...interface{}) (reply interface{}, err error) {
+	lc.LastUsed = time.Now()
+	calculateLifeTime(ctx, lc, commandName)
+	// Call the original method
+	return lc.ConnWithContext.DoContext(ctx, commandName, args...)
+}
+
+func (lc LoggingConn) CloseContext(ctx context.Context) error {
+	calculateLifeTime(ctx, &lc, "CloseContext")
+	// Call the original method
+	return lc.ConnWithContext.CloseContext(ctx)
+}
+
+func (lc *LoggingConn) SendContext(ctx context.Context, commandName string, args ...interface{}) error {
+	lc.LastUsed = time.Now()
+	// Call the original method
+	return lc.ConnWithContext.SendContext(ctx, commandName, args...)
+}
+
+func (lc *LoggingConn) ReceiveContext(ctx context.Context) (reply interface{}, err error) {
+	lc.LastUsed = time.Now()
+	// Call the original method
+	return lc.ConnWithContext.ReceiveContext(ctx)
+}
+
+func (lc *LoggingConn) FlushContext(ctx context.Context) error {
+	lc.LastUsed = time.Now()
+	// Call the original method
+	return lc.ConnWithContext.FlushContext(ctx)
+}
+
+// Log the command and connection age
+func calculateLifeTime(ctx context.Context, lc *LoggingConn, operation string) {
+	elapsedTime := time.Since(lc.CreatedAt)
+	LastUsedDuration := time.Since(lc.LastUsed)
+	log.Infof(ctx, "Operation: %s, Connection Id: %s, Connection createdAt: %s, Connection LastUsed: %s, LastUsedAfterDuration: %v, Existence Time: %v", operation, lc.Id, lc.CreatedAt.Format("2006-01-02 15:04:05.000000000"), lc.LastUsed.Format("2006-01-02 15:04:05.000000000"), LastUsedDuration, elapsedTime)
+}
+
+func getStats(ctx context.Context, stats redis.PoolStats) {
+	// Log current connection pool stats (idle and active connections)
+	log.Infof(ctx, "Active connections: %d, Idle connections: %d", stats.ActiveCount, stats.IdleCount)
 }
 
 func (b *backend) AddMulti(ctx context.Context, items []*nds.Item) (err error) {
@@ -80,6 +133,7 @@ func (b *backend) AddMulti(ctx context.Context, items []*nds.Item) (err error) {
 			err = cerr
 		}
 	}()
+	getStats(ctx, b.store.Stats())
 
 	err = set(ctx, redisConn, true, items)
 
@@ -180,9 +234,11 @@ func (b *backend) CompareAndSwapMulti(ctx context.Context, items []*nds.Item) (e
 	redisConn := b.store.GetWithContext(ctx).(redis.ConnWithContext)
 	defer func() {
 		if cerr := redisConn.CloseContext(ctx); cerr != nil && err == nil {
+			log.Warningf(ctx, "nds redis err:%v", err)
 			err = cerr
 		}
 	}()
+	getStats(ctx, b.store.Stats())
 
 	me := make(nds.MultiError, len(items))
 	meChan := make(chan error, len(items))
@@ -210,6 +266,7 @@ func (b *backend) CompareAndSwapMulti(ctx context.Context, items []*nds.Item) (e
 				buf.Grow(4 + len(item.Value))
 				_ = binary.Write(buf, binary.LittleEndian, item.Flags) // Always returns nil since we're using bytes.Buffer
 				_, _ = buf.Write(item.Value)
+				item.Expiration = b.cacheTtl
 				expire := int64(item.Expiration.Truncate(time.Millisecond) / time.Millisecond)
 				if item.Expiration == 0 {
 					expire = -1
@@ -283,6 +340,7 @@ func (b *backend) DeleteMulti(ctx context.Context, keys []string) (err error) {
 			err = cerr
 		}
 	}()
+	getStats(ctx, b.store.Stats())
 
 	if len(keys) == 0 {
 		return
@@ -304,7 +362,8 @@ func (b *backend) DeleteMulti(ctx context.Context, keys []string) (err error) {
 		err = nerr
 		return err
 	} else if num != int64(len(keys)) {
-		err = fmt.Errorf("redis: expected to remove %d keys, but only removed %d", len(keys), num)
+		log.Warningf(ctx, "nds err:redis: expected to remove %d keys, but only removed %d", len(keys), num)
+		err = nds.ErrCacheMiss
 		return
 	}
 
@@ -321,6 +380,7 @@ func (b *backend) GetMulti(ctx context.Context, keys []string) (result map[strin
 			err = cerr
 		}
 	}()
+	getStats(ctx, b.store.Stats())
 
 	args := make([]interface{}, len(keys))
 	for i, key := range keys {
@@ -386,6 +446,7 @@ func (b *backend) SetMulti(ctx context.Context, items []*nds.Item) (err error) {
 			err = cerr
 		}
 	}()
+	getStats(ctx, b.store.Stats())
 
 	err = set(ctx, redisConn, false, items)
 

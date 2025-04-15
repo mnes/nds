@@ -201,6 +201,9 @@ func (c *Client) getMulti(ctx context.Context,
 
 // loadCache will return the # of cache hits
 func (c *Client) loadCache(ctx context.Context, cacheItems []cacheItem) {
+	var span *trace.Span
+	ctx, span = trace.StartSpan(ctx, "nds.GetMulti.loadCache(cache1)")
+	defer span.End()
 
 	cacheKeys := make([]string, len(cacheItems))
 	for i, cacheItem := range cacheItems {
@@ -262,6 +265,9 @@ func init() {
 }
 
 func (c *Client) lockCache(ctx context.Context, cacheItems []cacheItem) {
+	var span *trace.Span
+	ctx, span = trace.StartSpan(ctx, "nds.GetMulti.lockCache(cache1)")
+	defer span.End()
 
 	lockItems := make([]*Item, 0, len(cacheItems))
 	lockCacheKeys := make([]string, 0, len(cacheItems))
@@ -345,6 +351,9 @@ func (c *Client) lockCache(ctx context.Context, cacheItems []cacheItem) {
 
 func (c *Client) loadDatastore(ctx context.Context, cacheItems []cacheItem,
 	valsType reflect.Type) error {
+	var span *trace.Span
+	ctx, span = trace.StartSpan(ctx, "nds.GetMulti.loadDatastore(cache1,cache2)")
+	defer span.End()
 
 	keys := make([]*datastore.Key, 0, len(cacheItems))
 	vals := make([]datastore.PropertyList, 0, len(cacheItems))
@@ -386,12 +395,12 @@ func (c *Client) loadDatastore(ctx context.Context, cacheItems []cacheItem,
 
 			if cacheItems[index].state == internalLock {
 				cacheItems[index].item.Flags = entityItem
-				cacheItems[index].item.Expiration = 0
+				cacheItems[index].item.Expiration = c.cacheTtl
 				if data, err := marshal(pl); err == nil {
 					cacheItems[index].item.Value = data
 				} else {
 					cacheItems[index].state = externalLock
-					c.onError(ctx, errors.Wrap(err, "nds:loadDatastore marshal"))
+					c.onError(ctx, errors.Wrap(err, "nds:loadDatastore marshal:cacheItems"))
 				}
 			}
 
@@ -401,7 +410,7 @@ func (c *Client) loadDatastore(ctx context.Context, cacheItems []cacheItem,
 		case datastore.ErrNoSuchEntity:
 			if cacheItems[index].state == internalLock {
 				cacheItems[index].item.Flags = noneItem
-				cacheItems[index].item.Expiration = 0
+				cacheItems[index].item.Expiration = c.cacheTtl
 				cacheItems[index].item.Value = []byte{}
 			}
 			cacheItems[index].err = datastore.ErrNoSuchEntity
@@ -414,6 +423,10 @@ func (c *Client) loadDatastore(ctx context.Context, cacheItems []cacheItem,
 }
 
 func (c *Client) saveCache(ctx context.Context, cacheItems []cacheItem) {
+	var span *trace.Span
+	ctx, span = trace.StartSpan(ctx, "nds.GetMulti.saveCache(cache1)")
+	defer span.End()
+
 	saveItems := make([]*Item, 0, len(cacheItems))
 	for _, cacheItem := range cacheItems {
 		if cacheItem.state == internalLock {
@@ -424,8 +437,7 @@ func (c *Client) saveCache(ctx context.Context, cacheItems []cacheItem) {
 	if len(saveItems) == 0 {
 		return
 	}
-
 	if err := c.cacher.CompareAndSwapMulti(ctx, saveItems); err != nil {
-		c.onError(ctx, errors.Wrap(err, "nds:saveCache CompareAndSwapMulti"))
+		c.onError(ctx, errors.Wrap(err, "nds:saveCache cacher CompareAndSwapMulti"))
 	}
 }

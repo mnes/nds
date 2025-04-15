@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"cloud.google.com/go/datastore"
 	"github.com/qedus/nds/v2"
@@ -35,7 +36,7 @@ func TestClient_onError(t *testing.T) {
 	testObj := []testObject{{}}
 
 	// Default implementation
-	c, err := nds.NewClient(ctx, testCacher, nds.WithDatastoreClient(dsClient))
+	c, err := nds.NewClient(ctx, testCacher, time.Second, nds.WithDatastoreClient(dsClient))
 	if err != nil {
 		t.Fatalf("could not make nds client due to error: %v", err)
 	}
@@ -53,7 +54,7 @@ func TestClient_onError(t *testing.T) {
 	// Custom implementation
 	var gotErr error
 	onErrFn := func(ctx context.Context, err error) { gotErr = err }
-	c, err = nds.NewClient(ctx, testCacher, nds.WithDatastoreClient(dsClient), nds.WithOnErrorFunc(onErrFn))
+	c, err = nds.NewClient(ctx, testCacher, time.Second, nds.WithDatastoreClient(dsClient), nds.WithOnErrorFunc(onErrFn))
 	if err != nil {
 		t.Fatalf("could not make nds client due to error: %v", err)
 	}
@@ -99,7 +100,7 @@ func TestNewClient(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := nds.NewClient(tt.args.ctx, tt.args.cacher)
+			_, err := nds.NewClient(tt.args.ctx, tt.args.cacher, time.Second)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewClient() error = %v, wantErr %v", err, tt.wantErr)
 				return
