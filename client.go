@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/datastore"
-	"github.com/qedus/nds/v2/logger/log"
+	"github.com/qedus/nds/v2/internal/log"
 )
 
 type OnErrorFunc func(ctx context.Context, err error)
