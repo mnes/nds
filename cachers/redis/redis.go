@@ -122,7 +122,7 @@ func calculateLifeTime(ctx context.Context, lc *LoggingConn, operation string) {
 
 func getStats(ctx context.Context, stats redis.PoolStats) {
 	// Log current connection pool stats (idle and active connections)
-	log.Infof(ctx, "Active connections: %d, Idle connections: %d", stats.ActiveCount, stats.IdleCount)
+	//log.Infof(ctx, "Active connections: %d, Idle connections: %d", stats.ActiveCount, stats.IdleCount)
 }
 
 func (b *backend) AddMulti(ctx context.Context, items []*nds.Item) (err error) {
