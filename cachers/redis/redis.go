@@ -115,9 +115,9 @@ func (lc *LoggingConn) FlushContext(ctx context.Context) error {
 
 // Log the command and connection age
 func calculateLifeTime(ctx context.Context, lc *LoggingConn, operation string) {
-	elapsedTime := time.Since(lc.CreatedAt)
-	LastUsedDuration := time.Since(lc.LastUsed)
-	log.Infof(ctx, "Operation: %s, Connection Id: %s, Connection createdAt: %s, Connection LastUsed: %s, LastUsedAfterDuration: %v, Existence Time: %v", operation, lc.Id, lc.CreatedAt.Format("2006-01-02 15:04:05.000000000"), lc.LastUsed.Format("2006-01-02 15:04:05.000000000"), LastUsedDuration, elapsedTime)
+	//elapsedTime := time.Since(lc.CreatedAt)
+	//LastUsedDuration := time.Since(lc.LastUsed)
+	//log.Infof(ctx, "Operation: %s, Connection Id: %s, Connection createdAt: %s, Connection LastUsed: %s, LastUsedAfterDuration: %v, Existence Time: %v", operation, lc.Id, lc.CreatedAt.Format("2006-01-02 15:04:05.000000000"), lc.LastUsed.Format("2006-01-02 15:04:05.000000000"), LastUsedDuration, elapsedTime)
 }
 
 func getStats(ctx context.Context, stats redis.PoolStats) {
